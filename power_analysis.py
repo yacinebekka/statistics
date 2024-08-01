@@ -1,25 +1,21 @@
-from scipy.stats import f, ncf, nct
+from scipy.stats import f, ncf, nct, t
+import numpy as np
 
-## !!! To be reworked and checked against know implementation
-
+## Check against R implementation -> OK R.A.S
 
 def get_power_f(N, J, alpha, f_squared):
     """
     Calculate the power of an F-test.
     
-    Parameters:
-    N (int): Total sample size
-    J (int): Number of groups
-    alpha (float): Significance level
-    f_squared (float): Cohen's f-squared, the effect size
-    
-    Returns:
-    float: Power of the F-test
+    N : Total sample size
+    J : Number of groups
+    alpha : Significance level
+    f_squared : Cohen's f-squared, the effect size
     """
     df_between = J - 1
     df_within = N - J
     # Correct non-centrality parameter calculation
-    non_centrality = N * f_squared * df_between / J
+    non_centrality = N * f_squared
     
     # Critical F value from the central F-distribution
     f_critical = f.ppf(1 - alpha, df_between, df_within)
@@ -33,51 +29,53 @@ def get_power_f(N, J, alpha, f_squared):
 
     return power
 
-def get_power_t(delta, alpha, n, s):
+def get_power_t(delta, alpha, n, s, two_tail : bool = True):
     """
-    Compute power for a two-sample t-test with equal sample sizes and variances
+    Compute power for a two-sample t-test with equal sample sizes and variances.
+    delta : minimum difference of mean (effect size)
+    alpha : signficicance level
+    n : Number of sample in each group (not total)
+    s : Pooled SD
+
+    If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
     """
     df = 2 * n - 2  # degrees of freedom for two-sample t-test
 
-    # Calculate t quantiles for lower and upper critical values
-    q_H0_low = t.ppf(alpha / 2, df=df)
-    q_H0_high = t.ppf(1 - alpha / 2, df=df)
+    if two_tail:
+        # Calculate t quantiles for lower and upper critical values
+        q_H0_low = t.ppf(alpha / 2, df=df)
+        q_H0_high = t.ppf(1 - alpha / 2, df=df)
 
-    # Calculate the noncentrality parameter
-    ncp = abs(delta) / (np.sqrt(2) * s / np.sqrt(n))
+        # Calculate the noncentrality parameter
+        ncp = abs(delta) / (np.sqrt(2) * s / np.sqrt(n))
 
-    # Calculate power using non-central t-distribution
-    power = (nct.cdf(q_H0_low, df, ncp) + (1 - nct.cdf(q_H0_high, df, ncp)))
-    
+        # Calculate power using non-central t-distribution
+        power = (nct.cdf(q_H0_low, df, ncp) + (1 - nct.cdf(q_H0_high, df, ncp)))
+
+    else:
+        q_H0_high = t.ppf(1 - alpha, df=df)
+        ncp =(delta  / s) * np.sqrt(n/2)
+        power = 1 - nct.cdf(q_H0_high, df, ncp)
+
     return power
 
-def get_power_welch_t(alpha=0.05, power=0.90, mu1=0, mu2=0, sigma1=1, sigma2=1, n2n1_ratio=1):
+def get_power_welch_t(delta, sd1, sd2, n1, n2, alpha=0.05, two_tail: bool = True):
     """
     Compute power for a two-sample Welch's t-test
     """
-    delta = mu1 - mu2
 
-    def calculate_power(n1, n2, delta, sigma1, sigma2, alpha):
-        s_pooled = np.sqrt((sigma1**2 / n1) + (sigma2**2 / n2))
-        d = delta / s_pooled
-        df = ((sigma1**2 / n1 + sigma2**2 / n2)**2 /
-              ((sigma1**2 / n1)**2 / (n1 - 1) + (sigma2**2 / n2)**2 / (n2 - 1)))
+    # Calculate the Welch-Satterthwaite degrees of freedom
+    df = ((sd1**2 / n1 + sd2**2 / n2)**2) / (((sd1**2 / n1)**2 / (n1 - 1)) + ((sd2**2 / n2)**2 / (n2 - 1)))
 
-        t_crit = t.ppf(1 - alpha / 2, df)
-        # Non-centrality parameter
-        non_centrality = d * np.sqrt(n1 * n2 / (n1 + n2))
-        # Calculate power using the non-central t-distribution
-        power = 2 * (1 - nct.cdf(t_crit, df, non_centrality))
+    # Non-centrality parameter
+    ncp = delta / np.sqrt(sd1**2 / n1 + sd2**2 / n2)
 
-        return power
+    if two_tail:
+        t_critical = t.ppf(1 - alpha / 2, df)
+        power = 1 - nct.cdf(t_critical, df, ncp)
 
-    n1 = 10  # Initial guess
-    n2 = math.ceil(n1 * n2n1_ratio)
-    while True:
-        calc_power = calculate_power(n1, n2, delta, sigma1, sigma2, alpha)
-        if calc_power >= power:
-            break
-        n1 += 1
-        n2 = math.ceil(n1 * n2n1_ratio)
+    else:
+        t_critical = t.ppf(1 - alpha, df)
+        power = 1 - nct.cdf(t_critical, df, ncp)
 
-    return n1, n2
+    return power
