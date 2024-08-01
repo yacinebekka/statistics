@@ -3,8 +3,9 @@ import statistics
 import math
 from scipy.stats import t, f
 
-## !!! To be reworked and checked against know implementation
+## Check against R implementation -> OK R.A.S.
 
+## Add LCL UCL for estimate
 
 def load_csv(filepath):
     data = {}  # Initialize an empty dictionary to store the data
