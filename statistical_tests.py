@@ -31,9 +31,10 @@ def load_csv(filepath):
                             data[header].append(value)
     return data
 
+
 def t_test_mean_diff_pooled_var(sample_1: list, sample_2: list, two_tail: bool = True):
 	'''
-	T-test for difference of mean, with unknown variance but asusming equal variance across samples.
+	T-test for difference of mean, with unknown variance but assuming equal variance across samples.
 
 	If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
 	'''
@@ -60,9 +61,10 @@ def t_test_mean_diff_pooled_var(sample_1: list, sample_2: list, two_tail: bool =
 
 	return (x_bar_1, x_bar_2, mean_diff, se_mean_diff, T_statistic, p_value, df)
 
+
 def f_test(sample_1: list, sample_2: list):
 	'''
-	F-test for difference of variance
+	F-test for ratio of variance
 
 	By convention for the ratio we put the largest sample variance at the numerator and we reject when the test statistic is above the critical value
 	'''
@@ -88,6 +90,7 @@ def f_test(sample_1: list, sample_2: list):
 	p_value = f.sf(F_statistic, df1, df2)  # sf is the survival function, equivalent to 1 - cdf
 
 	return (sample_var_1, sample_var_2, F_statistic, p_value, df1, df2)
+
 
 def levene_test(sample_1: list, sample_2: list):
 	'''
@@ -158,3 +161,74 @@ def welch_t_test(sample_1, sample_2, two_tail: bool = True):
 			p_value = t.sf(T_statistic, df)  # One-tailed test: p-value for mean1 > mean2
 
 	return x_bar_1, x_bar_2, mean_diff, T_statistic, p_value, df
+
+
+def t_test_contrasts(sample_1, sample_2, SS_resid, N, two_tail: bool = True):
+	'''
+	T-test for linear contrast with two groups in one-way ANOVA.
+	sample_1 : Sample data for group 1
+	sample_2 : Sample data for group 2
+	SS_resid : Residual sum of squares from the ANOVA
+	N : Total number of observations across all groups
+	two_tail : Whether to perform a two-tailed test. Default is True.
+
+	If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
+
+	'''
+	# Calculate means
+	x_bar_1 = statistics.mean(sample_1)
+	x_bar_2 = statistics.mean(sample_2)
+	mean_diff = x_bar_1 - x_bar_2
+
+	# Sample sizes
+	n1 = len(sample_1)
+	n2 = len(sample_2)
+
+	# Degrees of freedom
+	J = 2  # Since we are comparing two groups
+	df = N - J
+
+	# Calculate the standard error of the contrast
+	SE_contrast = math.sqrt((SS_resid / df) * ((1/n1) + (1/n2)))
+
+	# Calculate the t statistic
+	t_statistic = mean_diff / SE_contrast
+
+	# Calculate the p-value
+	if two_tail:
+	    p_value = 2 * t.sf(abs(t_statistic), df)
+	else:
+	    p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean4 > mean3
+
+	return (x_bar_1, x_bar_2, mean_diff, SE_contrast, t_statistic, p_value, df)
+
+
+def anova_f_test(*samples):
+	'''
+	ANOVA F-test for equal size sample across groups
+	'''
+	
+	combined_data = []
+	for sample in samples:
+		combined_data.extend(sample)
+
+	grand_mean = statistics.mean(combined_data)
+	group_mean = [statistics.mean(sample) for sample in samples]
+
+	sample_size = len(samples[0])
+
+	SS_treatment = np.sum([sample_size * (mean - grand_mean)**2 for mean in group_mean])
+
+	SS_residual = 0
+	for index, sample in enumerate(samples):
+		for observation in sample:
+			SS_residual += (observation - group_mean[index])**2
+
+	df1 = len(samples) - 1
+	df2 = (sample_size * len(samples)) - len(samples)
+
+	F_statistic = (SS_treatment / df1) / (SS_residual / df2)
+
+	p_value = f.sf(F_statistic, df1, df2)  # sf is the survival function, equivalent to 1 - cdf
+
+	return (SS_treatment, SS_residual, F_statistic, p_value, df1, df2)
