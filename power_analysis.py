@@ -5,7 +5,7 @@ import numpy as np
 
 def get_power_f(N, J, alpha, f_squared):
     """
-    Calculate the power of an F-test.
+    Calculate the power of an F-test for ratio of variance
     
     N : Total sample size
     J : Number of groups
@@ -23,11 +23,12 @@ def get_power_f(N, J, alpha, f_squared):
     # Power calculation using the non-central F-distribution
     power = 1 - ncf.cdf(f_critical, df_between, df_within, non_centrality)
 
-    print(f"df_between: {df_between}, df_within: {df_within}")
-    print(f"f_squared: {f_squared}, non_centrality: {non_centrality}")
-    print(f"f_critical: {f_critical}, power: {power}")
+    # print(f"df_between: {df_between}, df_within: {df_within}")
+    # print(f"f_squared: {f_squared}, non_centrality: {non_centrality}")
+    # print(f"f_critical: {f_critical}, power: {power}")
 
     return power
+
 
 def get_power_t(delta, alpha, n, s, two_tail : bool = True):
     """
@@ -59,6 +60,7 @@ def get_power_t(delta, alpha, n, s, two_tail : bool = True):
 
     return power
 
+
 def get_power_welch_t(delta, sd1, sd2, n1, n2, alpha=0.05, two_tail: bool = True):
     """
     Compute power for a two-sample Welch's t-test
@@ -71,11 +73,55 @@ def get_power_welch_t(delta, sd1, sd2, n1, n2, alpha=0.05, two_tail: bool = True
     ncp = delta / np.sqrt(sd1**2 / n1 + sd2**2 / n2)
 
     if two_tail:
-        t_critical = t.ppf(1 - alpha / 2, df)
-        power = 1 - nct.cdf(t_critical, df, ncp)
+        t_critical_upper = t.ppf(1 - alpha / 2, df)
+        t_critical_lower = t.ppf(alpha / 2, df)
+        power = 1 - nct.cdf(t_critical_upper, df, ncp) + nct.cdf(t_critical_lower, df, non_centrality)
 
     else:
         t_critical = t.ppf(1 - alpha, df)
         power = 1 - nct.cdf(t_critical, df, ncp)
+
+    return power
+
+
+def get_power_contrast_t_test(delta, alpha, SS_resid, N, n1, n2, J, two_tail: bool = True):
+    """
+    Calculate the power for a linear contrast t-test
+    """
+    df = N - J  # Degrees of freedom within groups
+    
+    variance_contrast = SS_resid / df * (1/n1 + 1/n2)  # Variance of the contrast
+    SE_gamma = np.sqrt(variance_contrast)  # Standard error for the contrast
+    noncentrality = delta / SE_gamma  # Noncentrality parameter
+
+    if two_tail:
+        t_critical_upper = t.ppf(1 - alpha / 2, df)
+        t_critical_lower = t.ppf(alpha / 2, df)
+        power = 1 - nct.cdf(t_critical_upper, df, noncentrality) + nct.cdf(t_critical_lower, df, noncentrality)
+    else:
+        t_critical = t.ppf(1 - alpha, df)
+        power = 1 - nct.cdf(t_critical, df, noncentrality)
+
+    return power
+
+
+def get_power_anova_f_test(deviations, sample_variance, J, n, alpha=0.05):
+    '''
+    Calculate power for ANOVA F-test with equal sample size across groups
+
+    deviations : eviations of group means from the grand mean (alpha_i for each group)
+    '''
+
+    sum_deviation_squared = sum(deviation**2 for deviation in deviations)
+    f2 = sum_deviation_squared / (J * sample_variance)
+    print(f2)
+    non_centrality = J * n * f2
+
+    df1 = J - 1
+    df2 = (J * n) - J
+
+    f_critical = f.ppf(1 - alpha, df1, df2)
+    
+    power = 1 - ncf.cdf(f_critical, df1, df2, non_centrality)
 
     return power
