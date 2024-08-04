@@ -3,7 +3,7 @@ import numpy as np
 
 ## Check against R implementation -> OK R.A.S
 
-def get_power_t(delta, alpha, n, s, two_tail : bool = True):
+def get_power_t(delta: float, alpha: float, n: int, s: float, two_tail : bool = True):
     """
     Compute power for a two-sample t-test with equal sample sizes and variances.
     delta : minimum difference of mean (effect size)
@@ -44,7 +44,7 @@ def get_power_t(delta, alpha, n, s, two_tail : bool = True):
     }
 
 
-def get_power_welch_t(delta, sd1, sd2, n1, n2, alpha=0.05, two_tail: bool = True):
+def get_power_welch_t(delta: float, sd1: float, sd2: float, n1: int, n2: int, alpha=0.05, two_tail: bool = True):
     """
     Compute power for a two-sample Welch's t-test
     delta : minimum difference of mean (effect size)
@@ -86,7 +86,7 @@ def get_power_welch_t(delta, sd1, sd2, n1, n2, alpha=0.05, two_tail: bool = True
     }
 
 
-def get_power_contrast_t_test(delta, alpha, sample_variance, N, J, two_tail: bool = True):
+def get_power_contrast_t_test(delta: float, alpha: float, sample_variance: float, N: int, J: int, two_tail: bool = True):
     """
     Calculate the power for a linear contrast t-test
     delta : minimum difference of mean (effect size)
@@ -128,7 +128,7 @@ def get_power_contrast_t_test(delta, alpha, sample_variance, N, J, two_tail: boo
     }
 
 
-def get_power_anova_f_test(deltas, sample_variance, J, N, alpha=0.05):
+def get_power_anova_f_test(deltas: float, sample_variance: float, J: int, N: int, alpha=0.05):
     '''
     Calculate power for ANOVA F-test with equal sample size across groups
 
