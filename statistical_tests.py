@@ -5,9 +5,7 @@ from scipy.stats import t, f
 
 ## Check against R implementation -> OK R.A.S.
 
-## Add LCL UCL for estimate
-
-def load_csv(filepath):
+def load_csv(filepath: str):
     data = {}  # Initialize an empty dictionary to store the data
     with open(filepath, mode='r', newline='', encoding='utf-8') as file:
         csv_reader = csv.DictReader(file)  # Use DictReader to read the CSV into a dictionary
@@ -32,7 +30,7 @@ def load_csv(filepath):
     return data
 
 
-def t_test_mean_diff_pooled_var(sample_1: list, sample_2: list, two_tail: bool = True):
+def t_test_mean_diff_pooled_var(sample_1: list, sample_2: list, two_tail: bool = True, alpha: float=0.05):
 	'''
 	T-test for difference of mean, with unknown variance but assuming equal variance across samples.
 
@@ -51,18 +49,37 @@ def t_test_mean_diff_pooled_var(sample_1: list, sample_2: list, two_tail: bool =
 	pooled_variance = (((n1 -1) * sample_var_1) + ((n2 -1) * sample_var_2)) / (n1 + n2 - 2)
 	se_mean_diff = math.sqrt(pooled_variance * ((1/n1) + (1/n2)))
 
-	T_statistic = mean_diff / se_mean_diff
+	t_statistic = mean_diff / se_mean_diff
 	df = n1 + n2 - 2
 
 	if two_tail:
-		p_value = 2 * t.sf(abs(T_statistic), df)
+		p_value = 2 * t.sf(abs(t_statistic), df)
+		t_critical = stats.t.ppf(1 - alpha/2, df)
+		margin_of_error = t_critical * se_mean_diff
+		lower_confidence_bound = diff_means - margin_of_error
+		upper_confidence_bound = diff_means + margin_of_error
+
 	else:
-		p_value = t.sf(T_statistic, df)  # One-tailed test: p-value for mean1 > mean2
+		p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean1 > mean2
+		t_critical = stats.t.ppf(1 - alpha, df)
+		margin_of_error = t_critical * se_mean_diff
+		lower_confidence_bound = diff_means - margin_of_error
+		upper_confidence_bound = None
 
-	return (x_bar_1, x_bar_2, mean_diff, se_mean_diff, T_statistic, p_value, df)
+	return {
+		'x_bar_1': x_bar_1, 
+		'x_bar_2': x_bar_2, 
+		'mean_diff': mean_diff, 
+		'lower_confidence_bound': lower_confidence_bound, 
+		'upper_confidence_bound': upper_confidence_bound, 
+		'se_mean_diff': se_mean_diff, 
+		't_statistic': t_statistic, 
+		'p_value': p_value, 
+		'df': df
+	}
 
 
-def f_test(sample_1: list, sample_2: list):
+def f_test(sample_1: list, sample_2: list, alpha: float=0.05):
 	'''
 	F-test for ratio of variance
 
@@ -82,17 +99,28 @@ def f_test(sample_1: list, sample_2: list):
 		df1 = len(sample_2) - 1
 		df2 = len(sample_1) - 1
 
-	F_statistic = larger_var / smaller_var
+	f_statistic = larger_var / smaller_var
 
-	print(larger_var)
-	print(smaller_var)
+    f_upper = f.ppf(1 - alpha/2, df1, df2)
+    f_lower = f.ppf(alpha/2, df1, df2)
+    upper_confidence_bound = f_statistic / f_upper
+    lower_confidence_bound = f_statistic / f_lower
 
 	p_value = f.sf(F_statistic, df1, df2)  # sf is the survival function, equivalent to 1 - cdf
 
-	return (sample_var_1, sample_var_2, F_statistic, p_value, df1, df2)
+	return {
+		'larger_var': larger_var,
+		'smaller_var': smaller_var,
+		'f_statistic': f_statistic,
+		'upper_confidence_bound': upper_confidence_bound,
+		'lower_confidence_bound': lower_confidence_bound,
+		'p_value': p_value,
+		'df1': df1,
+		'df2': df2
+	}
 
 
-def levene_test(sample_1: list, sample_2: list):
+def levene_test(sample_1: list, sample_2: list, alpha: float=0.05):
 	'''
 	Levene's test for equal variances usign mean as a centering point	
 	'''
@@ -123,14 +151,26 @@ def levene_test(sample_1: list, sample_2: list):
 	df_within = n1 + n2 - 2  # Total n - k
 
 	# Calculate the Levene's statistic
-	W_statistic = (numerator / df_between) / (denominator / df_within)
+	f_statistic = (numerator / df_between) / (denominator / df_within)
 
-	p_value = f.sf(W_statistic, df_between, df_within)
+    f_upper = f.ppf(1 - alpha/2, df_between, df_within)
+    f_lower = f.ppf(alpha/2, df_between, df_within)
+    upper_confidence_bound = f_statistic / f_upper
+    lower_confidence_bound = f_statistic / f_lower
 
-	return (W_statistic, p_value, df_between, df_within)
+	p_value = f.sf(f_statistic, df_between, df_within)
+
+	return {
+		'f_statistic': f_statistic,
+		'upper_confidence_bound': upper_confidence_bound,
+		'lower_confidence_bound': lower_confidence_bound,
+		'p_value': p_value,
+		'df_between': df_between,
+		'df_within': df_within
+	}
 
 
-def welch_t_test(sample_1, sample_2, two_tail: bool = True):
+def welch_t_test(sample_1: list, sample_2: list, two_tail: bool = True, alpha: float=0.05):
 	'''
 	Welch's t-test for the means of two independent samples, with unknown pop. variance and not equal variance across samples
 
@@ -149,21 +189,40 @@ def welch_t_test(sample_1, sample_2, two_tail: bool = True):
 	n2 = len(sample_2)
 
 	# Calculate Welch's t-statistic
-	T_statistic = (x_bar_1 - x_bar_2) / math.sqrt((sample_var_1 / n1) + (sample_var_2 / n2))
+	se_mean_diff = math.sqrt((sample_var_1 / n1) + (sample_var_2 / n2))
+	t_statistic = mean_diff / se_mean_diff
 
 	# Calculate the degrees of freedom
 	df = ((sample_var_1 / n1) + (sample_var_2 / n2))**2 / (((sample_var_1 / n1)**2 / (n1 - 1)) + ((sample_var_2 / n2)**2 / (n2 - 1)))
 
 	# Calculate the p-value
 	if two_tail:
-			p_value = 2 * t.sf(abs(T_statistic), df)  # Two-tailed test
+			p_value = 2 * t.sf(abs(t_statistic), df)  # Two-tailed test
+			t_critical = stats.t.ppf(1 - alpha/2, df)
+			margin_of_error = t_critical * se_mean_diff
+			lower_confidence_bound = diff_means - margin_of_error
+			upper_confidence_bound = diff_means + margin_of_error
 	else:
-			p_value = t.sf(T_statistic, df)  # One-tailed test: p-value for mean1 > mean2
+			p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean1 > mean2
+			t_critical = stats.t.ppf(1 - alpha, df)
+			margin_of_error = t_critical * se_mean_diff
+			lower_confidence_bound = diff_means - margin_of_error
+			upper_confidence_bound = None
 
-	return x_bar_1, x_bar_2, mean_diff, T_statistic, p_value, df
+	return {
+		'x_bar_1': x_bar_1,
+		'x_bar_2': x_bar_2,
+		'mean_diff': mean_diff,
+		'lower_confidence_bound': lower_confidence_bound,
+		'upper_confidence_bound': upper_confidence_bound,
+		'se_mean_diff': se_mean_diff,
+		't_statistic': t_statistic,
+		'p_value': p_value,
+		'df': df
+	}
 
 
-def t_test_contrasts(sample_1, sample_2, SS_resid, N, two_tail: bool = True):
+def t_test_contrasts(sample_1: list, sample_2: list, sample_variance: float, N: int, two_tail: bool = True, alpha: float=0.05):
 	'''
 	T-test for linear contrast with two groups in one-way ANOVA.
 	sample_1 : Sample data for group 1
@@ -188,6 +247,8 @@ def t_test_contrasts(sample_1, sample_2, SS_resid, N, two_tail: bool = True):
 	J = 2  # Since we are comparing two groups
 	df = N - J
 
+	SS_resid = sample_variance * N
+
 	# Calculate the standard error of the contrast
 	SE_contrast = math.sqrt((SS_resid / df) * ((1/n1) + (1/n2)))
 
@@ -196,16 +257,34 @@ def t_test_contrasts(sample_1, sample_2, SS_resid, N, two_tail: bool = True):
 
 	# Calculate the p-value
 	if two_tail:
-	    p_value = 2 * t.sf(abs(t_statistic), df)
+		p_value = 2 * t.sf(abs(t_statistic), df)
+		t_critical = stats.t.ppf(1 - alpha/2, df)
+		margin_of_error = t_critical * SE_contrast
+		lower_confidence_bound = diff_means - margin_of_error
+		upper_confidence_bound = diff_means + margin_of_error
 	else:
 	    p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean4 > mean3
+		t_critical = stats.t.ppf(1 - alpha, df)
+		margin_of_error = t_critical * SE_contrast
+		lower_confidence_bound = diff_means - margin_of_error
+		upper_confidence_bound = None
 
-	return (x_bar_1, x_bar_2, mean_diff, SE_contrast, t_statistic, p_value, df)
-
+	return {
+		'x_bar_1': x_bar_1,
+		'x_bar_2': x_bar_2,
+		'mean_diff': mean_diff,
+		'lower_confidence_bound': lower_confidence_bound,
+		'upper_confidence_bound': upper_confidence_bound,
+		'sample_variance': sample_variance
+		'SE_contrast': SE_contrast,
+		't_statistic': t_statistic,
+		'p_value': p_value,
+		'df': df
+	}
 
 def anova_f_test(*samples):
 	'''
-	ANOVA F-test for equal size sample across groups
+	ANOVA F-test for equal size sample across group
 	'''
 	
 	combined_data = []
@@ -227,8 +306,15 @@ def anova_f_test(*samples):
 	df1 = len(samples) - 1
 	df2 = (sample_size * len(samples)) - len(samples)
 
-	F_statistic = (SS_treatment / df1) / (SS_residual / df2)
+	f_statistic = (SS_treatment / df1) / (SS_residual / df2)
 
-	p_value = f.sf(F_statistic, df1, df2)  # sf is the survival function, equivalent to 1 - cdf
+	p_value = f.sf(f_statistic, df1, df2)  # sf is the survival function, equivalent to 1 - cdf
 
-	return (SS_treatment, SS_residual, F_statistic, p_value, df1, df2)
+	return {
+		'SS_treatment': SS_treatment,
+		'SS_residual': SS_residual,
+		'f_statistic': f_statistic,
+		'p_value': p_value,
+		'df1': df1,
+		'df2': df2
+	}
