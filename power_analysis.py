@@ -3,33 +3,6 @@ import numpy as np
 
 ## Check against R implementation -> OK R.A.S
 
-def get_power_f(N, J, alpha, f_squared):
-    """
-    Calculate the power of an F-test for ratio of variance
-    
-    N : Total sample size
-    J : Number of groups
-    alpha : Significance level
-    f_squared : Cohen's f-squared, the effect size
-    """
-    df_between = J - 1
-    df_within = N - J
-    # Correct non-centrality parameter calculation
-    non_centrality = N * f_squared
-    
-    # Critical F value from the central F-distribution
-    f_critical = f.ppf(1 - alpha, df_between, df_within)
-    
-    # Power calculation using the non-central F-distribution
-    power = 1 - ncf.cdf(f_critical, df_between, df_within, non_centrality)
-
-    # print(f"df_between: {df_between}, df_within: {df_within}")
-    # print(f"f_squared: {f_squared}, non_centrality: {non_centrality}")
-    # print(f"f_critical: {f_critical}, power: {power}")
-
-    return power
-
-
 def get_power_t(delta, alpha, n, s, two_tail : bool = True):
     """
     Compute power for a two-sample t-test with equal sample sizes and variances.
@@ -44,26 +17,44 @@ def get_power_t(delta, alpha, n, s, two_tail : bool = True):
 
     if two_tail:
         # Calculate t quantiles for lower and upper critical values
-        q_H0_low = t.ppf(alpha / 2, df=df)
-        q_H0_high = t.ppf(1 - alpha / 2, df=df)
+        t_critical_upper = t.ppf(alpha / 2, df=df)
+        t_critical_lower = t.ppf(1 - alpha / 2, df=df)
 
         # Calculate the noncentrality parameter
         ncp = abs(delta) / (np.sqrt(2) * s / np.sqrt(n))
 
         # Calculate power using non-central t-distribution
-        power = (nct.cdf(q_H0_low, df, ncp) + (1 - nct.cdf(q_H0_high, df, ncp)))
+        power = (nct.cdf(t_critical_lower, df, ncp) + (1 - nct.cdf(t_critical_upper, df, ncp)))
 
     else:
-        q_H0_high = t.ppf(1 - alpha, df=df)
+        t_critical_upper = t.ppf(1 - alpha, df=df)
+        t_critical_lower = None
         ncp =(delta  / s) * np.sqrt(n/2)
-        power = 1 - nct.cdf(q_H0_high, df, ncp)
+        power = 1 - nct.cdf(t_critical_upper, df, ncp)
 
-    return power
+    return {
+        'delta': delta,
+        'alpha': alpha,
+        'n': n,
+        'ncp': ncp,
+        'df': df,
+        't_critical_upper': t_critical_upper,
+        't_critical_lower': t_critical_upper,  # This seems to be a typo. It should probably be t_critical_lower if it exists.
+        'power': power
+    }
 
 
 def get_power_welch_t(delta, sd1, sd2, n1, n2, alpha=0.05, two_tail: bool = True):
     """
     Compute power for a two-sample Welch's t-test
+    delta : minimum difference of mean (effect size)
+    alpha : significance level
+    n1 : Number of observations in sample 1
+    n2 : Number of observations in sample 2
+    sd1 : Sample standard deviation for sample 1    
+    sd2 : Sample standard deviation for sample 2    
+
+    If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
     """
 
     # Calculate the Welch-Satterthwaite degrees of freedom
@@ -78,50 +69,96 @@ def get_power_welch_t(delta, sd1, sd2, n1, n2, alpha=0.05, two_tail: bool = True
         power = 1 - nct.cdf(t_critical_upper, df, ncp) + nct.cdf(t_critical_lower, df, non_centrality)
 
     else:
-        t_critical = t.ppf(1 - alpha, df)
-        power = 1 - nct.cdf(t_critical, df, ncp)
+        t_critical_upper = t.ppf(1 - alpha, df)
+        t_critical_lower = None
+        power = 1 - nct.cdf(t_critical_upper, df, ncp)
 
-    return power
+    return {
+        'delta': delta,
+        'alpha': alpha,
+        'n1': n1,
+        'n2': n2,
+        'ncp': ncp,
+        'df': df,
+        't_critical_upper': t_critical_upper,
+        't_critical_lower': t_critical_lower,
+        'power': power
+    }
 
 
-def get_power_contrast_t_test(delta, alpha, SS_resid, N, n1, n2, J, two_tail: bool = True):
+def get_power_contrast_t_test(delta, alpha, sample_variance, N, J, two_tail: bool = True):
     """
     Calculate the power for a linear contrast t-test
+    delta : minimum difference of mean (effect size)
+    alpha : significance level
+    sample_variance : Sample variance
+    N : Total number of observations
+    J : Number of groups
+
+    If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
     """
     df = N - J  # Degrees of freedom within groups
-    
-    variance_contrast = SS_resid / df * (1/n1 + 1/n2)  # Variance of the contrast
+
+    n = N / J
+
+    SS_resid = sample_variance * N
+
+    variance_contrast = SS_resid / df * (1/n + 1/n)  # Variance of the contrast
     SE_gamma = np.sqrt(variance_contrast)  # Standard error for the contrast
-    noncentrality = delta / SE_gamma  # Noncentrality parameter
+    ncp = delta / SE_gamma  # ncp parameter
 
     if two_tail:
         t_critical_upper = t.ppf(1 - alpha / 2, df)
         t_critical_lower = t.ppf(alpha / 2, df)
-        power = 1 - nct.cdf(t_critical_upper, df, noncentrality) + nct.cdf(t_critical_lower, df, noncentrality)
+        power = 1 - nct.cdf(t_critical_upper, df, ncp) + nct.cdf(t_critical_lower, df, ncp)
     else:
-        t_critical = t.ppf(1 - alpha, df)
-        power = 1 - nct.cdf(t_critical, df, noncentrality)
+        t_critical_upper = t.ppf(1 - alpha, df)
+        power = 1 - nct.cdf(t_critical_upper, df, ncp)
 
-    return power
+    return {
+        'delta': delta,
+        'alpha': alpha,
+        'sample_variance': sample_variance,
+        'n': n,
+        'ncp': ncp,
+        'df': df,
+        't_critical_upper': t_critical_upper,
+        't_critical_lower': t_critical_lower,
+        'power': power
+    }
 
 
-def get_power_anova_f_test(deviations, sample_variance, J, n, alpha=0.05):
+def get_power_anova_f_test(deltas, sample_variance, J, N, alpha=0.05):
     '''
     Calculate power for ANOVA F-test with equal sample size across groups
 
-    deviations : eviations of group means from the grand mean (alpha_i for each group)
+    deltas : List of deviations (delta) of group means from the grand mean (alpha_i for each group)
+    sample_variance : Sample variance
+    J : Number of groups
+    N : Total number of observations
     '''
 
-    sum_deviation_squared = sum(deviation**2 for deviation in deviations)
-    f2 = sum_deviation_squared / (J * sample_variance)
-    print(f2)
-    non_centrality = J * n * f2
+    n = N / J
+
+    sum_delta_squared = sum(deltas**2 for delta in deltas)
+    f2 = sum_delta_squared / (J * sample_variance)
+    ncp = J * n * f2
 
     df1 = J - 1
     df2 = (J * n) - J
 
     f_critical = f.ppf(1 - alpha, df1, df2)
     
-    power = 1 - ncf.cdf(f_critical, df1, df2, non_centrality)
+    power = 1 - ncf.cdf(f_critical, df1, df2, ncp)
 
-    return power
+    return {
+        'deltas': deltas,
+        'sample_variance': sample_variance,
+        'f2': f2,
+        'n': n,
+        'ncp': ncp,
+        'df1': df1,
+        'df2': df2,
+        'f_critical': f_critical,
+        'power': power
+    }
