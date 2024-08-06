@@ -14,22 +14,16 @@ def get_power_t(delta: float, alpha: float, n: int, s: float, two_tail : bool = 
     If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
     """
     df = 2 * n - 2  # degrees of freedom for two-sample t-test
+    ncp = abs(delta) / (s * np.sqrt(2/n))
 
     if two_tail:
-        # Calculate t quantiles for lower and upper critical values
         t_critical_upper = t.ppf(alpha / 2, df=df)
         t_critical_lower = t.ppf(1 - alpha / 2, df=df)
-
-        # Calculate the noncentrality parameter
-        ncp = abs(delta) / (np.sqrt(2) * s / np.sqrt(n))
-
-        # Calculate power using non-central t-distribution
-        power = (nct.cdf(t_critical_lower, df, ncp) + (1 - nct.cdf(t_critical_upper, df, ncp)))
+        power = nct.cdf(t_critical_lower, df, ncp) + (1 - nct.cdf(t_critical_upper, df, ncp))
 
     else:
         t_critical_upper = t.ppf(1 - alpha, df=df)
         t_critical_lower = None
-        ncp =(delta  / s) * np.sqrt(n/2)
         power = 1 - nct.cdf(t_critical_upper, df, ncp)
 
     return {
@@ -103,7 +97,7 @@ def get_power_contrast_t_test(delta: float, alpha: float, sample_variance: float
 
     SS_resid = sample_variance * N
 
-    variance_contrast = SS_resid / df * (1/n + 1/n)  # Variance of the contrast
+    variance_contrast = (SS_resid / df) * (1/n + 1/n)  # Variance of the contrast
     SE_gamma = np.sqrt(variance_contrast)  # Standard error for the contrast
     ncp = delta / SE_gamma  # ncp parameter
 
@@ -162,3 +156,23 @@ def get_power_anova_f_test(deltas: float, sample_variance: float, J: int, N: int
         'f_critical': f_critical,
         'power': power
     }
+
+
+def get_power_two_way_anova_main_effect_f_test():
+    pass
+
+
+def get_power_two_way_anova_interaction_term_f_test_():
+    pass
+
+
+def get_power_two_way_anova_contrast_t_test():
+    pass
+
+
+def get_power_full_vs_reduced_model_f_test():
+    pass
+
+
+
+## Add references
