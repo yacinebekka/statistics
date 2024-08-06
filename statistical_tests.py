@@ -113,11 +113,11 @@ def levene_test(*samples: np.array, alpha: float=0.05):
 	# Calculate the mean of Z values
 	Z_bar = [np.mean(z) for z in Z]
 
-    # Calculate the numerator (between-group variability)
-    SS_between = np.sum([ni[i] * (Z_bar[i] - overall_median)**2 for i in range(k)])
-
-    # Calculate the denominator (within-group variability)
-    SS_within = np.sum([np.sum([(z - Z_bar[i])**2 for z in Z[i]]) for i in range(k)])
+	# Calculate the numerator (between-group variability)
+	SS_between = np.sum([ni[i] * (Z_bar[i] - overall_median)**2 for i in range(k)])
+	
+	# Calculate the denominator (within-group variability)
+	SS_within = np.sum([np.sum([(z - Z_bar[i])**2 for z in Z[i]]) for i in range(k)])
 
 	# Degrees of freedom
 	df_between = k - 1
