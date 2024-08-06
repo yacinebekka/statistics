@@ -1,53 +1,26 @@
-import csv
-import statistics
-import math
 from scipy.stats import t, f
+import numpy as np
 
 ## Check against R implementation -> OK R.A.S.
 
-def load_csv(filepath: str):
-    data = {}  # Initialize an empty dictionary to store the data
-    with open(filepath, mode='r', newline='', encoding='utf-8') as file:
-        csv_reader = csv.DictReader(file)  # Use DictReader to read the CSV into a dictionary
-        headers = csv_reader.fieldnames  # Extract headers from the CSV file
-        if headers:
-            for header in headers:
-                data[header] = []  # Initialize a list for each header
-            for row in csv_reader:
-                for header in headers:
-                    value = row[header]
-                    # Attempt to convert numeric values to int or float
-                    if value.isdigit():  # Checks if value can be converted to int
-                        data[header].append(int(value))
-                    else:
-                        try:
-                            # Try converting to float if possible
-                            float_value = float(value)
-                            data[header].append(float_value)
-                        except ValueError:
-                            # Leave as string if it cannot be converted
-                            data[header].append(value)
-    return data
-
-
-def t_test_mean_diff_pooled_var(sample_1: list, sample_2: list, two_tail: bool = True, alpha: float=0.05):
+def t_test_mean_diff_pooled_var(sample_1: np.array, sample_2: np.array, two_tail: bool = True, alpha: float=0.05):
 	'''
 	T-test for difference of mean, with unknown variance but assuming equal variance across samples.
 
 	If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
 	'''
-	x_bar_1 = statistics.mean(sample_1)
-	x_bar_2 = statistics.mean(sample_2)
+	x_bar_1 = np.mean(sample_1)
+	x_bar_2 = np.mean(sample_2)
 	mean_diff = x_bar_1 - x_bar_2
 
-	sample_var_1 = statistics.variance(sample_1)
-	sample_var_2 = statistics.variance(sample_2)
+	sample_var_1 = np.var(sample_1, ddof=1)
+	sample_var_2 = np.var(sample_2, ddof=1)
 
 	n1 = len(sample_1)
 	n2 = len(sample_2)
 
 	pooled_variance = (((n1 -1) * sample_var_1) + ((n2 -1) * sample_var_2)) / (n1 + n2 - 2)
-	se_mean_diff = math.sqrt(pooled_variance * ((1/n1) + (1/n2)))
+	se_mean_diff = np.sqrt(pooled_variance * ((1/n1) + (1/n2)))
 
 	t_statistic = mean_diff / se_mean_diff
 	df = n1 + n2 - 2
@@ -79,14 +52,14 @@ def t_test_mean_diff_pooled_var(sample_1: list, sample_2: list, two_tail: bool =
 	}
 
 
-def f_test(sample_1: list, sample_2: list, alpha: float=0.05):
+def f_test(sample_1: np.array, sample_2: np.array, alpha: float=0.05):
 	'''
 	F-test for ratio of variance
 
 	By convention for the ratio we put the largest sample variance at the numerator and we reject when the test statistic is above the critical value
 	'''
-	sample_var_1 = statistics.variance(sample_1)
-	sample_var_2 = statistics.variance(sample_2)
+	sample_var_1 = np.var(sample_1, ddof=1)
+	sample_var_2 = np.var(sample_2, ddof=1)
 
 	if sample_var_1 >= sample_var_2:
 		larger_var = sample_var_1
@@ -120,38 +93,38 @@ def f_test(sample_1: list, sample_2: list, alpha: float=0.05):
 	}
 
 
-def levene_test(sample_1: list, sample_2: list, alpha: float=0.05):
+def levene_test(*samples: np.array, alpha: float=0.05):
 	'''
 	Levene's test for equal variances usign mean as a centering point	
 	'''
+	k = len(samples)
+
 	# Calculate means
-	x_bar_1 = statistics.mean(sample_1)
-	x_bar_2 = statistics.mean(sample_2)
+	group_means = [np.mean(sample) in samples]
+	grand_mean = np.mean([observation for sample in samples for observation in sample])
 
 	# Sample sizes
-	n1 = len(sample_1)
-	n2 = len(sample_2)
+	n_i = [len(sample) for sample in samples]
+	N = sum(n_i)
 
 	# Calculate Z values (deviations from the mean)
-	Z1 = [abs(x - x_bar_1) for x in sample_1]
-	Z2 = [abs(x - x_bar_2) for x in sample_2]
+	Z = [[abs(observation - group_mean[i]) for observation in sample] for i, sample in enumerate(samples)]
 
 	# Calculate the mean of Z values
-	Z_bar1 = statistics.mean(Z1)
-	Z_bar2 = statistics.mean(Z2)
+	Z_bar = [np.mean(z) for z in Z]
 
-	# Calculate the overall mean of Z values
-	overall_Z_mean = statistics.mean(Z1 + Z2)
+    # Calculate the numerator (between-group variability)
+    SS_between = np.sum([ni[i] * (Z_bar[i] - overall_median)**2 for i in range(k)])
 
-	numerator = n1 * (Z_bar1 - overall_Z_mean)**2 + n2 * (Z_bar2 - overall_Z_mean)**2
-	denominator = sum((z - Z_bar1)**2 for z in Z1) + sum((z - Z_bar2)**2 for z in Z2)
+    # Calculate the denominator (within-group variability)
+    SS_within = np.sum([np.sum([(z - Z_bar[i])**2 for z in Z[i]]) for i in range(k)])
 
 	# Degrees of freedom
-	df_between = 1  # k - 1 = 2 - 1
-	df_within = n1 + n2 - 2  # Total n - k
+	df_between = k - 1
+	df_within = N - k
 
 	# Calculate the Levene's statistic
-	f_statistic = (numerator / df_between) / (denominator / df_within)
+	f_statistic = (SS_between / df_between) / (SS_within / df_within)
 
     f_upper = f.ppf(1 - alpha/2, df_between, df_within)
     f_lower = f.ppf(alpha/2, df_between, df_within)
@@ -170,26 +143,26 @@ def levene_test(sample_1: list, sample_2: list, alpha: float=0.05):
 	}
 
 
-def welch_t_test(sample_1: list, sample_2: list, two_tail: bool = True, alpha: float=0.05):
+def welch_t_test(sample_1: np.array, sample_2: np.array, two_tail: bool = True, alpha: float=0.05):
 	'''
 	Welch's t-test for the means of two independent samples, with unknown pop. variance and not equal variance across samples
 
 	If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
 	'''
 	# Calculate means
-	x_bar_1 = statistics.mean(sample_1)
-	x_bar_2 = statistics.mean(sample_2)
+	x_bar_1 = np.mean(sample_1)
+	x_bar_2 = np.mean(sample_2)
 	mean_diff = x_bar_1 - x_bar_2
 
 	# Calculate variances
-	sample_var_1 = statistics.variance(sample_1)
-	sample_var_2 = statistics.variance(sample_2)
+	sample_var_1 = np.var(sample_1, ddof=1)
+	sample_var_2 = np.var(sample_2, ddof=1)
 
 	n1 = len(sample_1)
 	n2 = len(sample_2)
 
 	# Calculate Welch's t-statistic
-	se_mean_diff = math.sqrt((sample_var_1 / n1) + (sample_var_2 / n2))
+	se_mean_diff = np.sqrt((sample_var_1 / n1) + (sample_var_2 / n2))
 	t_statistic = mean_diff / se_mean_diff
 
 	# Calculate the degrees of freedom
@@ -222,7 +195,7 @@ def welch_t_test(sample_1: list, sample_2: list, two_tail: bool = True, alpha: f
 	}
 
 
-def t_test_contrasts(sample_1: list, sample_2: list, sample_variance: float, N: int, two_tail: bool = True, alpha: float=0.05):
+def t_test_contrasts(sample_1: np.array, sample_2: np.array, two_tail: bool = True, alpha: float=0.05):
 	'''
 	T-test for linear contrast with two groups in one-way ANOVA.
 	sample_1 : Sample data for group 1
@@ -235,13 +208,16 @@ def t_test_contrasts(sample_1: list, sample_2: list, sample_variance: float, N: 
 
 	'''
 	# Calculate means
-	x_bar_1 = statistics.mean(sample_1)
-	x_bar_2 = statistics.mean(sample_2)
+	x_bar_1 = np.mean(sample_1)
+	x_bar_2 = np.mean(sample_2)
 	mean_diff = x_bar_1 - x_bar_2
+
+	sample_variance = np.var(sample_1, ddof=1) # We assume equal variance across sample
 
 	# Sample sizes
 	n1 = len(sample_1)
 	n2 = len(sample_2)
+	N = n1 + n2
 
 	# Degrees of freedom
 	J = 2  # Since we are comparing two groups
@@ -282,17 +258,17 @@ def t_test_contrasts(sample_1: list, sample_2: list, sample_variance: float, N: 
 		'df': df
 	}
 
-def anova_f_test(*samples):
+def anova_f_test(*samples: np.array):
 	'''
-	ANOVA F-test for equal size sample across group
+	ANOVA F-test assume equal size sample across group
 	'''
 	
 	combined_data = []
 	for sample in samples:
 		combined_data.extend(sample)
 
-	grand_mean = statistics.mean(combined_data)
-	group_mean = [statistics.mean(sample) for sample in samples]
+	grand_mean = np.mean(combined_data)
+	group_mean = [np.mean(sample) for sample in samples]
 
 	sample_size = len(samples[0])
 
@@ -318,3 +294,108 @@ def anova_f_test(*samples):
 		'df1': df1,
 		'df2': df2
 	}
+
+
+def two_way_anova_main_effect_f_test(sample_array: np.array):
+	'''
+	Two-way ANOVA F-test for main effect, assume equal sample size for all group
+	
+	Expect a Numpy 2-D array as an input such that :
+
+	array([('A1', 'B1', 20.), ('A1', 'B1', 21.),
+	       ('A1', 'B2', 19.), ('A2', 'B1', 18.),
+	       ('A2', 'B2', 17.), ('A2', 'B2', 15.),
+	       ('A1', 'B1', 22.), ('A1', 'B1', 20.),
+	       ('A1', 'B2', 21.), ('A2', 'B1', 15.),
+	       ('A2', 'B2', 14.), ('A2', 'B2', 15.)],
+	      dtype=[('FactorA', '<U10'), ('FactorB', '<U10'), ('Response', '<f8')])
+
+	'''
+	factor_a_levels = np.unique(sample_array['FactorA'])
+	factor_b_levels = np.unique(sample_array['FactorB'])
+
+	J = len(factor_a_levels)
+	K = len(factor_b_levels)
+
+	group_means = {}
+	grand_total = 0
+	sample_sizes = []
+
+	for a in factor_a_levels:
+		for b in factor_b_levels:
+			filter_mask = (sample_array['FactorA'] == a) & (sample_array['FactorB'] == b)
+			group_data = sample_array[filter_mask]['Response']
+			mean = np.mean(group_data)
+			group_means[(a, b)] = mean
+			grand_total += np.sum(group_data)
+			sample_sizes.append(len(group_data))
+
+	N = np.sum(sample_sizes)
+	n = N / (J * K)
+
+	grand_mean = grand_total / N
+
+	df_A = J - 1  # Degrees of freedom for Factor A
+	df_B = K - 1  # Degrees of freedom for Factor B
+	df_interaction = df_A * df_B  # Interaction term
+	df_total = N - 1  # Total degrees of freedom
+	df_resid = df_total - df_A - df_B - df_interaction  # Residual degrees of freedom
+
+	SS_A = 0
+	for a in factor_a_levels:
+		filter_mask = (sample_array['FactorA'] == a)
+		responses = sample_array['Response'][filter_mask]
+		SS_A += n * (np.mean(responses) - grand_mean)**2
+
+	SS_B = 0
+	for b in factor_b_levels:
+		filter_mask = (sample_array['FactorB'] == b)
+		responses = sample_array['Response'][filter_mask]
+		SS_B += n * (np.mean(responses) - grand_mean)**2
+
+	SS_interaction = 0
+	for a in factor_a_levels:
+		for b in factor_b_levels:
+			filter_mask_ab = (sample_array['FactorA'] == a) & (sample_array['FactorB'] == b)
+			filter_mask_a = (sample_array['FactorA'] == a)
+			filter_mask_b = (sample_array['FactorB'] == b)
+
+			group_data = sample_array['Response'][filter_mask_ab]
+			factor_a_data = sample_array['Response'][filter_mask_a]
+			factor_b_data = sample_array['Response'][filter_mask_b]
+
+			SS_interaction += n * (np.mean(group_data) - np.mean(factor_a_data) - np.mean(factor_b_data) + grand_mean)**2
+
+	SS_resid = 0
+	for observation in sample_array:
+		a = observation['FactorA']
+		b = observation['FactorB']
+		response = observation['Response']
+
+		filter_mask_ab = (sample_array['FactorA'] == a) & (sample_array['FactorB'] == b)
+		group_data = sample_array['Response'][filter_mask_ab]
+
+		SS_resid += (observation - np.mean(group_data))**2
+
+	f_statistic_A = SS_A / df_A / SS_resid / df_resid
+	f_statistic_B = SS_B / df_B / SS_resid / df_resid
+	f_statistic_interaction = SS_interaction / df_interaction / SS_resid / df_resid
+
+	p_value_A = f.sf(f_statistic_A, df_A, df_resid)  # sf is the survival function, equivalent to 1 - cdf
+	p_value_B = f.sf(f_statistic_B, df_B, df_resid) 
+	p_value_interaction = f.sf(f_statistic_interaction, df_interaction, df_resid) 
+
+
+	# Full vs reduced model
+	# TBC
+
+
+def two_way_anova_contrast_t_test():
+	pass
+
+
+def full_vs_reduced_model_f_test():
+	pass
+
+
+## Add references
