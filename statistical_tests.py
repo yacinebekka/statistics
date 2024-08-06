@@ -3,7 +3,7 @@ import numpy as np
 
 ## Check against R implementation -> OK R.A.S.
 
-def t_test_mean_diff_pooled_var(sample_1: np.array, sample_2: np.array, two_tail: bool = True, alpha: float=0.05):
+def t_test_pooled_var(sample_1: np.array, sample_2: np.array, two_tail: bool = True, alpha: float=0.05):
 	'''
 	T-test for difference of mean, with unknown variance but assuming equal variance across samples.
 
@@ -226,7 +226,7 @@ def t_test_contrasts(sample_1: np.array, sample_2: np.array, two_tail: bool = Tr
 	SS_resid = sample_variance * N
 
 	# Calculate the standard error of the contrast
-	SE_contrast = math.sqrt((SS_resid / df) * ((1/n1) + (1/n2)))
+	SE_contrast = np.sqrt((SS_resid / df) * ((1/n1) + (1/n2)))
 
 	# Calculate the t statistic
 	t_statistic = mean_diff / SE_contrast
@@ -296,7 +296,7 @@ def anova_f_test(*samples: np.array):
 	}
 
 
-def two_way_anova_main_effect_f_test(sample_array: np.array):
+def two_way_anova_f_test(sample_array: np.array):
 	'''
 	Two-way ANOVA F-test for main effect, assume equal sample size for all group
 	
@@ -320,6 +320,8 @@ def two_way_anova_main_effect_f_test(sample_array: np.array):
 	group_means = {}
 	grand_total = 0
 	sample_sizes = []
+	main_effects_means = {}
+	interactions_means = {}
 
 	for a in factor_a_levels:
 		for b in factor_b_levels:
@@ -340,18 +342,21 @@ def two_way_anova_main_effect_f_test(sample_array: np.array):
 	df_interaction = df_A * df_B  # Interaction term
 	df_total = N - 1  # Total degrees of freedom
 	df_resid = df_total - df_A - df_B - df_interaction  # Residual degrees of freedom
+	df_resid_reduced = df_total - df_A - df_B
 
 	SS_A = 0
 	for a in factor_a_levels:
 		filter_mask = (sample_array['FactorA'] == a)
 		responses = sample_array['Response'][filter_mask]
 		SS_A += n * (np.mean(responses) - grand_mean)**2
+		main_effects_means[a] = np.mean(responses)
 
 	SS_B = 0
 	for b in factor_b_levels:
 		filter_mask = (sample_array['FactorB'] == b)
 		responses = sample_array['Response'][filter_mask]
 		SS_B += n * (np.mean(responses) - grand_mean)**2
+		main_effects_means[b] = np.mean(responses)
 
 	SS_interaction = 0
 	for a in factor_a_levels:
@@ -367,6 +372,8 @@ def two_way_anova_main_effect_f_test(sample_array: np.array):
 			SS_interaction += n * (np.mean(group_data) - np.mean(factor_a_data) - np.mean(factor_b_data) + grand_mean)**2
 
 	SS_resid = 0
+    SS_resid_reduced = 0
+
 	for observation in sample_array:
 		a = observation['FactorA']
 		b = observation['FactorB']
@@ -375,27 +382,104 @@ def two_way_anova_main_effect_f_test(sample_array: np.array):
 		filter_mask_ab = (sample_array['FactorA'] == a) & (sample_array['FactorB'] == b)
 		group_data = sample_array['Response'][filter_mask_ab]
 
-		SS_resid += (observation - np.mean(group_data))**2
+		predicted_full = group_means[(a, b)]
+		predicted_reduced = main_effects_means_a[a] + main_effects_means_b[b] - grand_mean
+
+		SS_resid += (observation - predicted_full)**2
+		SS_resid_reduced += (observation - predicted_reduced)**2
 
 	f_statistic_A = SS_A / df_A / SS_resid / df_resid
 	f_statistic_B = SS_B / df_B / SS_resid / df_resid
 	f_statistic_interaction = SS_interaction / df_interaction / SS_resid / df_resid
+	f_statistic_reduced = (SS_resid_reduced - SS_resid) / (df_resid - df_resid_reduced) / SS_resid / df_resid
 
 	p_value_A = f.sf(f_statistic_A, df_A, df_resid)  # sf is the survival function, equivalent to 1 - cdf
 	p_value_B = f.sf(f_statistic_B, df_B, df_resid) 
-	p_value_interaction = f.sf(f_statistic_interaction, df_interaction, df_resid) 
+	p_value_interaction = f.sf(f_statistic_interaction, df_interaction, df_resid)
+	p_value_reduced = f.sf(f_statistic_reduced, df_resid, df_resid - df_resid_reduced)
 
+	return {
+		'factor_a' : {
+			'SS' : SS_A,
+			'f_statistic' : f_statistic_A,
+			'p_value' : p_value_A,
+			'df' : df_A
+		},
+		'factor_b' : {
+			'SS' : SS_B,
+			'f_statistic' : f_statistic_B,
+			'p_value' : p_value_B,
+			'df' : df_B
+		},
+		'interactions' : {
+			'SS' : SS_interaction,
+			'f_statistic' : f_statistic_interaction,
+			'p_value' : p_value_interaction,
+			'df' : df_interaction
+		},
+		'residuals' : {
+			'SS' : SS_resid,
+			'df' : df_resid
+		},
+		'reduced_model' : {
+			'SS_resid' : SS_resid_reduced,
+			'f_statistic' : f_statistic_reduced,
+			'p_value' : p_value_reduced,
+			'df_resid' : df_resid_reduced,
+		},
+		'descriptive' : {
+			'grand_mean' : grand_mean,
+			'group_mean' : group_mean,
+			'main_effects_means' : main_effects_means,
+			'interactions_means' : interactions_means
+		}
+	}
 
-	# Full vs reduced model
-	# TBC
+def two_way_anova_contrast_t_test(x_bar_1, x_bar_2, SS_resid, df_resid, n, v, two_tail: bool = True, alpha: float=0.05):
+	'''
+	T-test for linear contrast with two groups in one-way ANOVA.
 
+	n = sample size per group (assuming equal sample size across all groups)
+	v = number of group inside contrasts
 
-def two_way_anova_contrast_t_test():
-	pass
+	If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
 
+	'''
+	# Calculate means
+	mean_diff = x_bar_1 - x_bar_2
 
-def full_vs_reduced_model_f_test():
-	pass
+	# Calculate the standard error of the contrast
+	SE_contrast = np.sqrt((SS_resid / df_resid) * ((1/n) * v))
+
+	# Calculate the t statistic
+	t_statistic = mean_diff / SE_contrast
+
+	# Calculate the p-value
+	if two_tail:
+		p_value = 2 * t.sf(abs(t_statistic), df)
+		t_critical = stats.t.ppf(1 - alpha/2, df)
+		margin_of_error = t_critical * SE_contrast
+		lower_confidence_bound = diff_means - margin_of_error
+		upper_confidence_bound = diff_means + margin_of_error
+	else:
+	    p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean4 > mean3
+		t_critical = stats.t.ppf(1 - alpha, df)
+		margin_of_error = t_critical * SE_contrast
+		lower_confidence_bound = diff_means - margin_of_error
+		upper_confidence_bound = None
+
+	return {
+		'x_bar_1': x_bar_1,
+		'x_bar_2': x_bar_2,
+		'mean_diff': mean_diff,
+		'lower_confidence_bound': lower_confidence_bound,
+		'upper_confidence_bound': upper_confidence_bound,
+		'sample_variance': sample_variance
+		'SE_contrast': SE_contrast,
+		't_statistic': t_statistic,
+		'p_value': p_value,
+		'df': df
+	}
 
 
 ## Add references
