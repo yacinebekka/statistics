@@ -74,10 +74,10 @@ def f_test(sample_1: np.array, sample_2: np.array, alpha: float=0.05):
 
 	f_statistic = larger_var / smaller_var
 
-    f_upper = f.ppf(1 - alpha/2, df1, df2)
-    f_lower = f.ppf(alpha/2, df1, df2)
-    upper_confidence_bound = f_statistic / f_upper
-    lower_confidence_bound = f_statistic / f_lower
+	f_upper = f.ppf(1 - alpha/2, df1, df2)
+	f_lower = f.ppf(alpha/2, df1, df2)
+	upper_confidence_bound = f_statistic / f_upper
+	lower_confidence_bound = f_statistic / f_lower
 
 	p_value = f.sf(F_statistic, df1, df2)  # sf is the survival function, equivalent to 1 - cdf
 
@@ -126,10 +126,10 @@ def levene_test(*samples: np.array, alpha: float=0.05):
 	# Calculate the Levene's statistic
 	f_statistic = (SS_between / df_between) / (SS_within / df_within)
 
-    f_upper = f.ppf(1 - alpha/2, df_between, df_within)
-    f_lower = f.ppf(alpha/2, df_between, df_within)
-    upper_confidence_bound = f_statistic / f_upper
-    lower_confidence_bound = f_statistic / f_lower
+	f_upper = f.ppf(1 - alpha/2, df_between, df_within)
+	f_lower = f.ppf(alpha/2, df_between, df_within)
+	upper_confidence_bound = f_statistic / f_upper
+	lower_confidence_bound = f_statistic / f_lower
 
 	p_value = f.sf(f_statistic, df_between, df_within)
 
