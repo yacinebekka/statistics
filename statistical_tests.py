@@ -372,7 +372,7 @@ def two_way_anova_f_test(sample_array: np.array):
 			SS_interaction += n * (np.mean(group_data) - np.mean(factor_a_data) - np.mean(factor_b_data) + grand_mean)**2
 
 	SS_resid = 0
-    SS_resid_reduced = 0
+	SS_resid_reduced = 0
 
 	for observation in sample_array:
 		a = observation['FactorA']
