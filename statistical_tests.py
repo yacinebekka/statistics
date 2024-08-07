@@ -308,28 +308,20 @@ def two_way_anova_f_test(sample_array: np.array):
 	factor_a_levels = np.unique(sample_array['FactorA'])
 	factor_b_levels = np.unique(sample_array['FactorB'])
 
+	factors_A = sample_array['FactorA']
+	factors_B = sample_array['FactorB']
+	response = sample_array['Response']
+
 	J = len(factor_a_levels)
 	K = len(factor_b_levels)
 
-	group_means = {}
-	grand_total = 0
-	sample_sizes = []
-	main_effects_means = {}
-	interactions_means = {}
-
-	for a in factor_a_levels:
-		for b in factor_b_levels:
-			filter_mask = (sample_array['FactorA'] == a) & (sample_array['FactorB'] == b)
-			group_data = sample_array[filter_mask]['Response']
-			mean = np.mean(group_data)
-			group_means[(a, b)] = mean
-			grand_total += np.sum(group_data)
-			sample_sizes.append(len(group_data))
-
-	N = np.sum(sample_sizes)
+	N = len(sample_array)
 	n = N / (J * K)
 
-	grand_mean = grand_total / N
+	factor_a_numeric = np.array([np.where(factor_a_levels == f)[0][0] for f in factors_A])
+	factor_b_numeric = np.array([np.where(factor_b_levels == f)[0][0] for f in factors_B])
+
+	grand_mean = np.mean(response)
 
 	df_A = J - 1  # Degrees of freedom for Factor A
 	df_B = K - 1  # Degrees of freedom for Factor B
@@ -338,59 +330,48 @@ def two_way_anova_f_test(sample_array: np.array):
 	df_resid = df_total - df_A - df_B - df_interaction  # Residual degrees of freedom
 	df_resid_reduced = df_total - df_A - df_B
 
-	SS_A = 0
-	for a in factor_a_levels:
-		filter_mask = (sample_array['FactorA'] == a)
-		responses = sample_array['Response'][filter_mask]
-		SS_A += n * (np.mean(responses) - grand_mean)**2
-		main_effects_means[a] = np.mean(responses)
 
-	SS_B = 0
-	for b in factor_b_levels:
-		filter_mask = (sample_array['FactorB'] == b)
-		responses = sample_array['Response'][filter_mask]
-		SS_B += n * (np.mean(responses) - grand_mean)**2
-		main_effects_means[b] = np.mean(responses)
+	# Compute SS_A
+	X_A = np.vstack([np.ones(len(response)), factor_a_numeric]).T
+	beta_A = np.linalg.inv(X_A.T @ X_A) @ X_A.T @ response
+	fitted_values_A = X_A @ beta_A
+	SS_A = np.sum((fitted_values_A - grand_mean) ** 2)
+	residuals_A = response - fitted_values_A
 
-	SS_interaction = 0
-	for a in factor_a_levels:
-		for b in factor_b_levels:
-			filter_mask_ab = (sample_array['FactorA'] == a) & (sample_array['FactorB'] == b)
-			filter_mask_a = (sample_array['FactorA'] == a)
-			filter_mask_b = (sample_array['FactorB'] == b)
+	# Compute SS_B
+	X_AB = np.vstack([np.ones(len(response)), factor_a_numeric, factor_b_numeric]).T
+	beta_B = np.linalg.inv(X_AB.T @ X_AB) @ X_AB.T @ residuals_A
+	fitted_values_B = X_AB @ beta_B
+	SS_B = np.sum((fitted_values_B - 0) ** 2)
 
-			group_data = sample_array['Response'][filter_mask_ab]
-			factor_a_data = sample_array['Response'][filter_mask_a]
-			factor_b_data = sample_array['Response'][filter_mask_b]
+	# Compute SS_interaction
+	beta_AB = np.linalg.inv(X_AB.T @ X_AB) @ X_AB.T @ response
+	fitted_values_AB = X_AB @ beta_AB
+	residuals_AB = response - fitted_values_AB
+	SS_resid_reduced = np.sum(residuals_AB ** 2)
 
-			SS_interaction += n * (np.mean(group_data) - np.mean(factor_a_data) - np.mean(factor_b_data) + grand_mean)**2
+	interaction_ab = factor_a_numeric * factor_b_numeric
+	X_full = np.vstack([np.ones(len(response)), factor_a_numeric, factor_b_numeric, interaction_ab]).T
+	beta_interaction = np.linalg.inv(X_full.T @ X_full) @ X_full.T @ residuals_AB
+	fitted_values_interactions = X_full @ beta_interaction
+	SS_interaction = np.sum((fitted_values_interactions - 0) ** 2)
 
-	SS_resid = 0
-	SS_resid_reduced = 0
+	# Compute SS_resid
+	beta_full = np.linalg.inv(X_full.T @ X_full) @ X_full.T @ response
+	fitted_full = X_full @ beta_full
+	residuals_full = response - fitted_full
+	SS_resid = np.sum(residuals_full ** 2)
 
-	for observation in sample_array:
-		a = observation['FactorA']
-		b = observation['FactorB']
-		response = observation['Response']
-
-		filter_mask_ab = (sample_array['FactorA'] == a) & (sample_array['FactorB'] == b)
-		group_data = sample_array['Response'][filter_mask_ab]
-
-		predicted_full = group_means[(a, b)]
-		predicted_reduced = main_effects_means_a[a] + main_effects_means_b[b] - grand_mean
-
-		SS_resid += (observation - predicted_full)**2
-		SS_resid_reduced += (observation - predicted_reduced)**2
-
-	f_statistic_A = SS_A / df_A / SS_resid / df_resid
-	f_statistic_B = SS_B / df_B / SS_resid / df_resid
-	f_statistic_interaction = SS_interaction / df_interaction / SS_resid / df_resid
-	f_statistic_reduced = (SS_resid_reduced - SS_resid) / (df_resid - df_resid_reduced) / SS_resid / df_resid
+	f_statistic_A = (SS_A / df_A) / (SS_resid / df_resid)
+	f_statistic_B = (SS_B / df_B) / (SS_resid / df_resid)
+	f_statistic_interaction = (SS_interaction / df_interaction) / (SS_resid / df_resid)
+	f_statistic_reduced = (SS_resid_reduced - SS_resid) / (df_resid_reduced - df_resid)
+	f_statistic_reduced = f_statistic_reduced / (SS_resid / df_resid)
 
 	p_value_A = f.sf(f_statistic_A, df_A, df_resid)  # sf is the survival function, equivalent to 1 - cdf
 	p_value_B = f.sf(f_statistic_B, df_B, df_resid) 
 	p_value_interaction = f.sf(f_statistic_interaction, df_interaction, df_resid)
-	p_value_reduced = f.sf(f_statistic_reduced, df_resid, df_resid - df_resid_reduced)
+	p_value_reduced = f.sf(f_statistic_reduced, df_resid_reduced - df_resid, df_resid)
 
 	return {
 		'factor_a' : {
@@ -421,12 +402,6 @@ def two_way_anova_f_test(sample_array: np.array):
 			'p_value' : p_value_reduced,
 			'df_resid' : df_resid_reduced,
 		},
-		'descriptive' : {
-			'grand_mean' : grand_mean,
-			'group_mean' : group_mean,
-			'main_effects_means' : main_effects_means,
-			'interactions_means' : interactions_means
-		}
 	}
 
 def two_way_anova_contrast_t_test(x_bar_1, x_bar_2, SS_resid, df_resid, n, v, two_tail: bool = True, alpha: float=0.05):
@@ -456,7 +431,7 @@ def two_way_anova_contrast_t_test(x_bar_1, x_bar_2, SS_resid, df_resid, n, v, tw
 		lower_confidence_bound = mean_diff - margin_of_error
 		upper_confidence_bound = mean_diff + margin_of_error
 	else:
-		p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean4 > mean3
+		p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean2 > mean1
 		t_critical = t.ppf(1 - alpha, df)
 		margin_of_error = t_critical * SE_contrast
 		lower_confidence_bound = mean_diff - margin_of_error
