@@ -225,6 +225,8 @@ def simulate_two_way_anova_contrast_t_test(mu1, mu2, sigma, n, v, alpha, two_tai
 		if result['p_value'] < alpha:
 			rejection += 1
 
+	power = rejections / num_simulations
+
 	return {
 		'power' : power,
 		'n' : n
