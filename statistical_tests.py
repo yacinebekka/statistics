@@ -27,16 +27,16 @@ def t_test_pooled_var(sample_1: np.array, sample_2: np.array, two_tail: bool = T
 
 	if two_tail:
 		p_value = 2 * t.sf(abs(t_statistic), df)
-		t_critical = stats.t.ppf(1 - alpha/2, df)
+		t_critical = t.ppf(1 - alpha/2, df)
 		margin_of_error = t_critical * se_mean_diff
-		lower_confidence_bound = diff_means - margin_of_error
-		upper_confidence_bound = diff_means + margin_of_error
+		lower_confidence_bound = mean_diff - margin_of_error
+		upper_confidence_bound = mean_diff + margin_of_error
 
 	else:
 		p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean1 > mean2
-		t_critical = stats.t.ppf(1 - alpha, df)
+		t_critical = t.ppf(1 - alpha, df)
 		margin_of_error = t_critical * se_mean_diff
-		lower_confidence_bound = diff_means - margin_of_error
+		lower_confidence_bound = mean_diff - margin_of_error
 		upper_confidence_bound = None
 
 	return {
@@ -79,7 +79,8 @@ def f_test(sample_1: np.array, sample_2: np.array, alpha: float=0.05):
 	upper_confidence_bound = f_statistic / f_upper
 	lower_confidence_bound = f_statistic / f_lower
 
-	p_value = f.sf(F_statistic, df1, df2)  # sf is the survival function, equivalent to 1 - cdf
+	p_value = 2 * min(f.cdf(f_statistic, df1, df2), f.sf(f_statistic, df1, df2))  # sf is the survival function, equivalent to 1 - cdf
+
 
 	return {
 		'larger_var': larger_var,
@@ -99,44 +100,37 @@ def levene_test(*samples: np.array, alpha: float=0.05):
 	'''
 	k = len(samples)
 
-	# Calculate means
-	group_means = [np.mean(sample) in samples]
-	grand_mean = np.mean([observation for sample in samples for observation in sample])
+	all_data = np.concatenate(samples)
+	grand_mean = np.mean(all_data)
 
-	# Sample sizes
+	# Calculate Z values (absolute deviations from the group means)
+	Z = [np.abs(sample - np.mean(sample)) for sample in samples]
+
+	# Calculate the overall mean of Z values
+	Z_means = [np.mean(z) for z in Z]
+	grand_Z_mean = np.mean(np.concatenate(Z))
+
+	# Calculate the numerator (between-group variability for Z scores)
 	n_i = [len(sample) for sample in samples]
-	N = sum(n_i)
+	SS_between = sum(n * (Z_mean - grand_Z_mean) ** 2 for Z_mean, n in zip(Z_means, n_i))
 
-	# Calculate Z values (deviations from the mean)
-	Z = [[abs(observation - group_mean[i]) for observation in sample] for i, sample in enumerate(samples)]
-
-	# Calculate the mean of Z values
-	Z_bar = [np.mean(z) for z in Z]
-
-	# Calculate the numerator (between-group variability)
-	SS_between = np.sum([ni[i] * (Z_bar[i] - overall_median)**2 for i in range(k)])
-	
-	# Calculate the denominator (within-group variability)
-	SS_within = np.sum([np.sum([(z - Z_bar[i])**2 for z in Z[i]]) for i in range(k)])
+	# Calculate the denominator (within-group variability for Z scores)
+	SS_within = sum(np.sum((z - Z_mean) ** 2) for z, Z_mean in zip(Z, Z_means))
 
 	# Degrees of freedom
 	df_between = k - 1
-	df_within = N - k
+	df_within = sum(n_i) - k
 
 	# Calculate the Levene's statistic
-	f_statistic = (SS_between / df_between) / (SS_within / df_within)
+	W = SS_between / df_between / (SS_within / df_within)
 
-	f_upper = f.ppf(1 - alpha/2, df_between, df_within)
-	f_lower = f.ppf(alpha/2, df_between, df_within)
-	upper_confidence_bound = f_statistic / f_upper
-	lower_confidence_bound = f_statistic / f_lower
-
-	p_value = f.sf(f_statistic, df_between, df_within)
+	# Calculate p-value (right-tailed)
+	p_value = f.sf(W, df_between, df_within)
 
 	return {
-		'f_statistic': f_statistic,
-		'upper_confidence_bound': upper_confidence_bound,
-		'lower_confidence_bound': lower_confidence_bound,
+		'f_statistic': W,
+		'SS_between': SS_between,
+		'SS_within' : SS_within,
 		'p_value': p_value,
 		'df_between': df_between,
 		'df_within': df_within
@@ -171,15 +165,15 @@ def welch_t_test(sample_1: np.array, sample_2: np.array, two_tail: bool = True, 
 	# Calculate the p-value
 	if two_tail:
 			p_value = 2 * t.sf(abs(t_statistic), df)  # Two-tailed test
-			t_critical = stats.t.ppf(1 - alpha/2, df)
+			t_critical = t.ppf(1 - alpha/2, df)
 			margin_of_error = t_critical * se_mean_diff
-			lower_confidence_bound = diff_means - margin_of_error
-			upper_confidence_bound = diff_means + margin_of_error
+			lower_confidence_bound = mean_diff - margin_of_error
+			upper_confidence_bound = mean_diff + margin_of_error
 	else:
 			p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean1 > mean2
-			t_critical = stats.t.ppf(1 - alpha, df)
+			t_critical = t.ppf(1 - alpha, df)
 			margin_of_error = t_critical * se_mean_diff
-			lower_confidence_bound = diff_means - margin_of_error
+			lower_confidence_bound = mean_diff - margin_of_error
 			upper_confidence_bound = None
 
 	return {
@@ -195,7 +189,7 @@ def welch_t_test(sample_1: np.array, sample_2: np.array, two_tail: bool = True, 
 	}
 
 
-def t_test_contrasts(sample_1: np.array, sample_2: np.array, two_tail: bool = True, alpha: float=0.05):
+def t_test_contrasts(sample_1: np.array, sample_2: np.array, J: int, two_tail: bool = True, alpha: float=0.05):
 	'''
 	T-test for linear contrast with two groups in one-way ANOVA.
 	sample_1 : Sample data for group 1
@@ -203,7 +197,8 @@ def t_test_contrasts(sample_1: np.array, sample_2: np.array, two_tail: bool = Tr
 	SS_resid : Residual sum of squares from the ANOVA
 	N : Total number of observations across all groups
 	two_tail : Whether to perform a two-tailed test. Default is True.
-
+	J : Number of groups in ANOVA
+	
 	If one-tail we assume that we have H0 : X_bar_1 <=  X_bar_2
 
 	'''
@@ -220,7 +215,6 @@ def t_test_contrasts(sample_1: np.array, sample_2: np.array, two_tail: bool = Tr
 	N = n1 + n2
 
 	# Degrees of freedom
-	J = 2  # Since we are comparing two groups
 	df = N - J
 
 	SS_resid = sample_variance * N
@@ -234,15 +228,15 @@ def t_test_contrasts(sample_1: np.array, sample_2: np.array, two_tail: bool = Tr
 	# Calculate the p-value
 	if two_tail:
 		p_value = 2 * t.sf(abs(t_statistic), df)
-		t_critical = stats.t.ppf(1 - alpha/2, df)
+		t_critical = t.ppf(1 - alpha/2, df)
 		margin_of_error = t_critical * SE_contrast
-		lower_confidence_bound = diff_means - margin_of_error
-		upper_confidence_bound = diff_means + margin_of_error
+		lower_confidence_bound = mean_diff - margin_of_error
+		upper_confidence_bound = mean_diff + margin_of_error
 	else:
-	    p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean4 > mean3
-		t_critical = stats.t.ppf(1 - alpha, df)
+		p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean4 > mean3
+		t_critical = t.ppf(1 - alpha, df)
 		margin_of_error = t_critical * SE_contrast
-		lower_confidence_bound = diff_means - margin_of_error
+		lower_confidence_bound = mean_diff - margin_of_error
 		upper_confidence_bound = None
 
 	return {
@@ -251,7 +245,7 @@ def t_test_contrasts(sample_1: np.array, sample_2: np.array, two_tail: bool = Tr
 		'mean_diff': mean_diff,
 		'lower_confidence_bound': lower_confidence_bound,
 		'upper_confidence_bound': upper_confidence_bound,
-		'sample_variance': sample_variance
+		'sample_variance': sample_variance,
 		'SE_contrast': SE_contrast,
 		't_statistic': t_statistic,
 		'p_value': p_value,
@@ -457,15 +451,15 @@ def two_way_anova_contrast_t_test(x_bar_1, x_bar_2, SS_resid, df_resid, n, v, tw
 	# Calculate the p-value
 	if two_tail:
 		p_value = 2 * t.sf(abs(t_statistic), df)
-		t_critical = stats.t.ppf(1 - alpha/2, df)
+		t_critical = t.ppf(1 - alpha/2, df)
 		margin_of_error = t_critical * SE_contrast
-		lower_confidence_bound = diff_means - margin_of_error
-		upper_confidence_bound = diff_means + margin_of_error
+		lower_confidence_bound = mean_diff - margin_of_error
+		upper_confidence_bound = mean_diff + margin_of_error
 	else:
-	    p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean4 > mean3
-		t_critical = stats.t.ppf(1 - alpha, df)
+		p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean4 > mean3
+		t_critical = t.ppf(1 - alpha, df)
 		margin_of_error = t_critical * SE_contrast
-		lower_confidence_bound = diff_means - margin_of_error
+		lower_confidence_bound = mean_diff - margin_of_error
 		upper_confidence_bound = None
 
 	return {
@@ -474,12 +468,9 @@ def two_way_anova_contrast_t_test(x_bar_1, x_bar_2, SS_resid, df_resid, n, v, tw
 		'mean_diff': mean_diff,
 		'lower_confidence_bound': lower_confidence_bound,
 		'upper_confidence_bound': upper_confidence_bound,
-		'sample_variance': sample_variance
+		'sample_variance': sample_variance,
 		'SE_contrast': SE_contrast,
 		't_statistic': t_statistic,
 		'p_value': p_value,
 		'df': df
 	}
-
-
-## Add references
