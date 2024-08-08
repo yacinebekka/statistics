@@ -1,5 +1,5 @@
 import numpy as np
-import statistical_test as st
+import statistical_tests as st
 
 
 def simulate_t_test_pooled_var_power(mu_1, mu_2, sigma1, sigma2, n, alpha, two_tail, num_simulations):
@@ -159,7 +159,7 @@ def simulate_anova_f_test_power(group_means, sigma, n, alpha, num_simulations):
 		'n' : n
 	}
 
-def simulate_two_way_anova_f_test_power(group_means, sigma, n, alpha, num_simulations):
+def simulate_two_way_anova_f_test_power(group_means, levels_a, levels_b, sigma, n, alpha, num_simulations):
 	'''
 	Compute power of a one-way ANOVA f-test using simulation
 
@@ -173,9 +173,26 @@ def simulate_two_way_anova_f_test_power(group_means, sigma, n, alpha, num_simula
 	rejection_reduced = 0
 
 	for _ in range(num_simulations):
-		sim_samples = [np.random.normal(mean, sigma, n) for mean in group_means]
+		samples = []
+		factor_combinations = []
+		for i, mean in enumerate(group_means):
+			# Determine the corresponding factor levels based on the index
+			a_level = levels_a[i // len(levels_b)]  # Dividing index by number of B levels
+			b_level = levels_b[i % len(levels_b)]   # Modulo index by number of B levels
 
-		result = st.two_way_anova_f_test(sim_samples)
+			# Generate samples for this specific group
+			group_samples = np.random.normal(mean, sigma, n)
+			samples.extend(group_samples)
+
+			# Append the factor combination for each sample in this group
+			factor_combinations.extend([(a_level, b_level)] * n)
+
+		# Convert lists to structured numpy array
+		structured_data = np.array(list(zip(samples, *zip(*factor_combinations))),
+		                           dtype=[('Response', 'f8'), ('FactorA', 'U10'), ('FactorB', 'U10')])
+
+
+		result = st.two_way_anova_f_test(structured_data)
 
 		if result['factor_a']['p_value'] < alpha:
 			rejection_factorA += 1
@@ -196,7 +213,8 @@ def simulate_two_way_anova_f_test_power(group_means, sigma, n, alpha, num_simula
 		'power_factor_b' : power_factor_b,
 		'power_interactions' : power_interactions,
 		'power_reduced_model' : power_reduced_model,
-		'n' : n
+		'n' : n,
+		's':structured_data
 	}
 
 
@@ -208,10 +226,10 @@ def simulate_two_way_anova_contrast_t_test(mu1, mu2, sigma, n, v, alpha, two_tai
 	rejection = 0
 
 	for _ in range(num_simulations):
-		sim_sample_1 = np.random.normal(mu_1, sigma, n)
-		sim_sample_2 = np.random.normal(mu_2, sigma, n)
+		sim_sample_1 = np.random.normal(mu1, sigma, n)
+		sim_sample_2 = np.random.normal(mu2, sigma, n)
 
-		SS_resid = v * (n - 1)
+		df_resid = v * (n - 1)
 		SS_resid = 0
 
 		for observation in sim_sample_1:
@@ -220,12 +238,12 @@ def simulate_two_way_anova_contrast_t_test(mu1, mu2, sigma, n, v, alpha, two_tai
 		for observation in sim_sample_2:
 			SS_resid += (observation - np.mean(sim_sample_2))**2
 
-		result = st.two_way_anova_contrast_t_test(mu1, mu2, SS_resid, SS_resid, n, v, two_tail=two_tail, alpha=alpha)
+		result = st.two_way_anova_contrast_t_test(mu1, mu2, SS_resid, df_resid, n, v, two_tail=two_tail, alpha=alpha)
 
 		if result['p_value'] < alpha:
 			rejection += 1
 
-	power = rejections / num_simulations
+	power = rejection / num_simulations
 
 	return {
 		'power' : power,
