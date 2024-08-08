@@ -160,7 +160,7 @@ def welch_t_test(sample_1: np.array, sample_2: np.array, two_tail: bool = True, 
 	t_statistic = mean_diff / se_mean_diff
 
 	# Calculate the degrees of freedom
-	df = ((sample_var_1 / n1) + (sample_var_2 / n2))**2 / (((sample_var_1 / n1)**2 / (n1 - 1)) + ((sample_var_2 / n2)**2 / (n2 - 1)))
+	df = int(((sample_var_1 / n1) + (sample_var_2 / n2))**2 / (((sample_var_1 / n1)**2 / (n1 - 1)) + ((sample_var_2 / n2)**2 / (n2 - 1))))
 
 	# Calculate the p-value
 	if two_tail:
@@ -425,14 +425,14 @@ def two_way_anova_contrast_t_test(x_bar_1, x_bar_2, SS_resid, df_resid, n, v, tw
 
 	# Calculate the p-value
 	if two_tail:
-		p_value = 2 * t.sf(abs(t_statistic), df)
-		t_critical = t.ppf(1 - alpha/2, df)
+		p_value = 2 * t.sf(abs(t_statistic), df_resid)
+		t_critical = t.ppf(1 - alpha/2, df_resid)
 		margin_of_error = t_critical * SE_contrast
 		lower_confidence_bound = mean_diff - margin_of_error
 		upper_confidence_bound = mean_diff + margin_of_error
 	else:
-		p_value = t.sf(t_statistic, df)  # One-tailed test: p-value for mean2 > mean1
-		t_critical = t.ppf(1 - alpha, df)
+		p_value = t.sf(t_statistic, df_resid)  # One-tailed test: p-value for mean2 > mean1
+		t_critical = t.ppf(1 - alpha, df_resid)
 		margin_of_error = t_critical * SE_contrast
 		lower_confidence_bound = mean_diff - margin_of_error
 		upper_confidence_bound = None
@@ -443,9 +443,11 @@ def two_way_anova_contrast_t_test(x_bar_1, x_bar_2, SS_resid, df_resid, n, v, tw
 		'mean_diff': mean_diff,
 		'lower_confidence_bound': lower_confidence_bound,
 		'upper_confidence_bound': upper_confidence_bound,
-		'sample_variance': sample_variance,
 		'SE_contrast': SE_contrast,
 		't_statistic': t_statistic,
 		'p_value': p_value,
-		'df': df
+		'df': df_resid
 	}
+
+## Reference :
+## - Statistical Design and Analysis of Biological Experiments, Hans-Michael Kaltenbach, 2021
