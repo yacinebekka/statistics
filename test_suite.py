@@ -1,4 +1,5 @@
 import statistical_tests as st
+import power_analysis as pa
 import unittest
 import numpy as np
 
@@ -138,9 +139,6 @@ class TestSuite(unittest.TestCase):
 		self.assertEqual(round(result['df_between'], 0), 2)
 		self.assertEqual(round(result['df_within'], 0), 12)
 
-	# def test_t_test_contrasts(self):
-		#pass
-
 	def test_anova_f_test(self):
 		'''
 		sample1 = c(12, 22, 21, 19, 23)
@@ -250,6 +248,178 @@ class TestSuite(unittest.TestCase):
 		self.assertEqual(round(result['reduced_model']['df_resid'], 0), 17)	
 		self.assertEqual(round(result['reduced_model']['p_value'], 4), 0.7489)	
 		self.assertEqual(round(result['reduced_model']['f_statistic'], 3), 0.106)	
+
+	# 	# Analytical power calculation functions
+
+	def test_t_test_power(self):
+		'''
+		sample1 <- c(10, 12, 10, 13, 14, 10, 11, 12, 14, 13)
+		sample2 <- c(14, 15, 15, 16, 17, 15, 16, 17, 16, 15)
+
+		mean1 <- mean(sample1)
+		mean2 <- mean(sample2)
+		sd1 <- sd(sample1)
+		sd2 <- sd(sample2)
+		n1 <- length(sample1)
+		n2 <- length(sample2)
+
+		pooled_sd <- sqrt(((n1 - 1) * sd1^2 + (n2 - 1) * sd2^2) / (n1 + n2 - 2))
+
+		power_calculation <- power.t.test(n = n1, delta = mean2 - mean1, sd = pooled_sd, sig.level = 0.05, type = "two.sample", alternative = "two.sided")
+
+	    Two-sample t test power calculation 
+
+	              n = 10
+	          delta = 1
+	             sd = 1.791957
+	      sig.level = 0.05
+	          power = 0.2182778
+	    alternative = two.sided
+
+	    power_calculation <- power.t.test(n = n1, delta = mean2 - mean1, sd = pooled_sd, sig.level = 0.05, type = "two.sample", alternative = "one.sided")
+
+	    Two-sample t test power calculation 
+
+	              n = 10
+	          delta = 1
+	             sd = 1.791957
+	      sig.level = 0.05
+	          power = 0.3285556
+	    alternative = one.sided 
+		'''
+		sample1 = [10, 12, 10, 13, 14, 10, 11, 12, 14, 13]
+		sample2 = [14, 12, 13, 14, 16, 12, 11, 14, 14, 9]
+		n1 = len(sample1)
+		n2 = len(sample2)
+
+		mean1 = np.mean(sample1)
+		mean2 = np.mean(sample2)
+		sample_sd1 = np.std(sample1, ddof=1)
+		sample_sd2 = np.std(sample2, ddof=1)
+		pooled_sd = np.sqrt(((n1 - 1) * sample_sd1**2 + (n2 - 1) * sample_sd2**2) / (n1 + n2 - 2))
+
+		result = pa.get_power_t((mean2 - mean1), 0.05, 10, pooled_sd, two_tail=True)
+		self.assertEqual(round(result['power'], 2), 0.22) # Not exact match starting at 3 decimals
+
+		result = pa.get_power_t((mean2 - mean1), 0.05, 10, pooled_sd, two_tail=False)
+		self.assertEqual(round(result['power'], 4), 0.3286)
+
+
+	def test_welch_t_test_power(self):
+		'''
+		library(MKpower)
+
+		sample1 <- c(10, 12, 10, 13, 14, 10, 11, 12, 14, 13)
+		sample2 <- c(14, 12, 13, 14, 16, 12, 11, 14, 14, 9)
+
+		mean1 <- mean(sample1)
+		mean2 <- mean(sample2)
+		sd1 <- sd(sample1)
+		sd2 <- sd(sample2)
+		n1 <- length(sample1)
+		n2 <- length(sample2)
+
+		pooled_sd <- sqrt(((n1 - 1) * sd1^2 + (n2 - 1) * sd2^2) / (n1 + n2 - 2))
+		d <- (mean1 - mean2) / pooled_sd
+
+		power_calculation = power.welch.t.test(n = 10, delta = (mean2 - mean1), sd1 = sd1, sd2 = sd2, sig.level = 0.05, alternative = "two.sided")
+
+	              n = 10
+	          delta = 1
+	            sd1 = 1.595131
+	            sd2 = 1.969207
+	      sig.level = 0.05
+	          power = 0.2174527
+	    alternative = two.sided
+
+	    power_calculation = power.welch.t.test(n = 10, delta = (mean2 - mean1), sd1 = sd1, sd2 = sd2, sig.level = 0.05, alternative = "two.sided")
+
+	    Two-sample Welch t test power calculation 
+
+	              n = 10
+	          delta = 1
+	            sd1 = 1.595131
+	            sd2 = 1.969207
+	      sig.level = 0.05
+	          power = 0.3278267
+	    alternative = one.sided
+		'''
+
+		sample1 = [10, 12, 10, 13, 14, 10, 11, 12, 14, 13]
+		sample2 = [14, 12, 13, 14, 16, 12, 11, 14, 14, 9]
+		n1 = len(sample1)
+		n2 = len(sample2)
+
+		mean1 = np.mean(sample1)
+		mean2 = np.mean(sample2)
+		sample_sd1 = np.std(sample1, ddof=1)
+		sample_sd2 = np.std(sample2, ddof=1)
+		pooled_sd = np.sqrt(((n1 - 1) * sample_sd1**2 + (n2 - 1) * sample_sd2**2) / (n1 + n2 - 2))
+
+		result = pa.get_power_welch_t((mean2 - mean1), sample_sd1, sample_sd2, 10, 10, 0.05, two_tail=True)
+		self.assertEqual(round(result['power'], 3), 0.218)
+
+		result = pa.get_power_welch_t((mean2 - mean1), sample_sd1, sample_sd2, 10, 10, 0.05, two_tail=False)
+		self.assertEqual(round(result['power'], 4), 0.3278)
+
+
+	def test_anova_f_test_power(self):
+		'''
+		# Install and load the necessary package
+		if (!require(pwr)) install.packages("pwr")
+		library(pwr)
+
+		# Define the data arrays
+		sample1 <- c(113.70, 94.35, 103.63, 106.32, 104.04, 98.93, 115.11, 99.05, 120.18, 99.37)
+		sample2 <- c(118.04, 127.86, 91.11, 102.21, 103.66, 111.35, 102.15, 78.43, 80.59, 118.20)
+		sample3 <- c(106.93, 92.18, 108.28, 122.14, 128.95, 105.69, 107.42, 92.36, 114.60, 103.60)
+
+		data <- c(sample1, sample2, sample3)
+		group <- factor(rep(c("Group1", "Group2", "Group3"), each = 10))
+
+		# Calculate grand mean and deviations for each group
+		grand_mean <- mean(data)
+		group_means <- tapply(data, group, mean)
+		deltas <- group_means - grand_mean
+
+		# Calculate total variance
+		total_variance <- var(data)
+
+		# Calculate sum of squared deviations and f-squared
+		sum_delta_squared <- sum(10 * deltas^2)  # Multiply by n (10) in each group
+		f_squared <- sum_delta_squared / (length(data) * total_variance)
+
+		# Degrees of freedom
+		df_between <- length(group_means) - 1
+		df_within <- length(data) - length(group_means)
+
+		# Calculate power using the pwr.f2.test function
+		power_result <- pwr.f2.test(u = df_between, v = df_within, f2 = f_squared, sig.level = 0.05)
+
+		# Print results
+		print(power_result)
+
+	     Multiple regression power calculation 
+
+	              u = 2
+	              v = 27
+	             f2 = 0.02638736
+	      sig.level = 0.05
+	          power = 0.1072853
+
+		'''
+
+		sample1 = [113.70, 94.35, 103.63, 106.32, 104.04, 98.93, 115.11, 99.05, 120.18, 99.37]
+		sample2 = [118.04, 127.86, 91.11, 102.21, 103.66, 111.35, 102.15, 78.43, 80.59, 118.20]
+		sample3 = [106.93, 92.18, 108.28, 122.14, 128.95, 105.69, 107.42, 92.36, 114.60, 103.60]
+
+		grand_mean = np.mean([np.mean(sample1), np.mean(sample2), np.mean(sample3)])
+		deltas = [np.mean(sample1) - grand_mean, np.mean(sample2) - grand_mean, np.mean(sample3) - grand_mean]
+		all_data = np.concatenate([sample1, sample2, sample3])
+		sample_variance = np.var(all_data, ddof=1)
+
+		result = pa.get_power_anova_f_test(deltas, sample_variance, 3, 30, alpha=0.05)
+		self.assertEqual(round(result['power'], 4), 0.1073)
 
 
 if __name__ == '__main__':
