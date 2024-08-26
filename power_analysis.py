@@ -1,7 +1,6 @@
 from scipy.stats import f, ncf, nct, t
 import numpy as np
 
-## Check against R implementation -> OK R.A.S
 
 def get_power_t(delta: float, alpha: float, n: int, s: float, two_tail : bool = True):
     """
@@ -17,10 +16,12 @@ def get_power_t(delta: float, alpha: float, n: int, s: float, two_tail : bool = 
     ncp = abs(delta) / (s * np.sqrt(2/n))
 
     if two_tail:
-        t_critical_upper = t.ppf(alpha / 2, df=df)
-        t_critical_lower = t.ppf(1 - alpha / 2, df=df)
-        power = nct.cdf(t_critical_lower, df, ncp) + (1 - nct.cdf(t_critical_upper, df, ncp))
+        # Correct critical values for two-tailed test
 
+        t_critical_lower = t.ppf(alpha / 2, df)
+        t_critical_upper = t.ppf(1 - alpha / 2, df)
+        # Calculate the power
+        power = nct.sf(t_critical_upper, df, ncp) + nct.cdf(t_critical_lower, df, ncp)
     else:
         t_critical_upper = t.ppf(1 - alpha, df=df)
         t_critical_lower = None
@@ -33,7 +34,7 @@ def get_power_t(delta: float, alpha: float, n: int, s: float, two_tail : bool = 
         'ncp': ncp,
         'df': df,
         't_critical_upper': t_critical_upper,
-        't_critical_lower': t_critical_upper,  # This seems to be a typo. It should probably be t_critical_lower if it exists.
+        't_critical_lower': t_critical_lower,
         'power': power
     }
 
@@ -55,15 +56,15 @@ def get_power_welch_t(delta: float, sd1: float, sd2: float, n1: int, n2: int, al
     df = ((sd1**2 / n1 + sd2**2 / n2)**2) / (((sd1**2 / n1)**2 / (n1 - 1)) + ((sd2**2 / n2)**2 / (n2 - 1)))
 
     # Non-centrality parameter
-    ncp = delta / np.sqrt(sd1**2 / n1 + sd2**2 / n2)
+    ncp = abs(delta) / np.sqrt(sd1**2 / n1 + sd2**2 / n2)
 
     if two_tail:
-        t_critical_upper = t.ppf(1 - alpha / 2, df)
-        t_critical_lower = t.ppf(alpha / 2, df)
-        power = 1 - nct.cdf(t_critical_upper, df, ncp) + nct.cdf(t_critical_lower, df, non_centrality)
+        t_critical_upper = t.ppf(alpha / 2, df=df)
+        t_critical_lower = t.ppf(1 - (alpha / 2), df=df)
+        power = nct.sf(t_critical_lower, df, ncp) + nct.cdf(t_critical_upper, df, ncp)
 
     else:
-        t_critical_upper = t.ppf(1 - alpha, df)
+        t_critical_upper = t.ppf(1 - alpha, df=df)
         t_critical_lower = None
         power = 1 - nct.cdf(t_critical_upper, df, ncp)
 
@@ -104,7 +105,7 @@ def get_power_contrast_t_test(delta: float, alpha: float, sample_variance: float
     if two_tail:
         t_critical_upper = t.ppf(1 - alpha / 2, df)
         t_critical_lower = t.ppf(alpha / 2, df)
-        power = 1 - nct.cdf(t_critical_upper, df, ncp) + nct.cdf(t_critical_lower, df, ncp)
+        power = nct.cdf(t_critical_upper, df, ncp) + nct.sf(t_critical_lower, df, ncp)
     else:
         t_critical_upper = t.ppf(1 - alpha, df)
         power = 1 - nct.cdf(t_critical_upper, df, ncp)
@@ -132,9 +133,9 @@ def get_power_anova_f_test(deltas: float, sample_variance: float, J: int, N: int
     N : Total number of observations
     '''
 
-    n = N / J
+    n = N // J
 
-    sum_delta_squared = sum(deltas**2 for delta in deltas)
+    sum_delta_squared = sum(delta**2 for delta in deltas)
     f2 = sum_delta_squared / (J * sample_variance)
     ncp = J * n * f2
 
@@ -158,21 +159,5 @@ def get_power_anova_f_test(deltas: float, sample_variance: float, J: int, N: int
     }
 
 
-def get_power_two_way_anova_main_effect_f_test():
-    pass
-
-
-def get_power_two_way_anova_interaction_term_f_test_():
-    pass
-
-
-def get_power_two_way_anova_contrast_t_test():
-    pass
-
-
-def get_power_full_vs_reduced_model_f_test():
-    pass
-
-
-
-## Add references
+## Reference :
+## - Statistical Design and Analysis of Biological Experiments, Hans-Michael Kaltenbach, 2021
