@@ -292,7 +292,7 @@ def anova_f_test(*samples: np.array):
 
 def two_way_anova_f_test(sample_array: np.array):
 	'''
-	Two-way ANOVA F-test for main effect, assume equal sample size for all group
+	Two-way ANOVA F-test for main effect, assume equal sample size for all group. Implemented with Type 1 Sum of squares
 	
 	Expect a Numpy 2-D array as an input such that :
 
