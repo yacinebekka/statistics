@@ -59,14 +59,14 @@ def get_power_welch_t(delta: float, sd1: float, sd2: float, n1: int, n2: int, al
     ncp = abs(delta) / np.sqrt(sd1**2 / n1 + sd2**2 / n2)
 
     if two_tail:
-        t_critical_upper = t.ppf(alpha / 2, df=df)
-        t_critical_lower = t.ppf(1 - (alpha / 2), df=df)
-        power = nct.sf(t_critical_lower, df, ncp) + nct.cdf(t_critical_upper, df, ncp)
+        t_critical_lower = t.ppf(alpha / 2, df=df)
+        t_critical_upper = t.ppf(1 - (alpha / 2), df=df)
+        power = nct.cdf(t_critical_lower, df, ncp) + nct.sf(t_critical_upper, df, ncp)
 
     else:
-        t_critical_upper = t.ppf(1 - alpha, df=df)
-        t_critical_lower = None
-        power = 1 - nct.cdf(t_critical_upper, df, ncp)
+        t_critical_lower = t.ppf(1 - alpha, df=df)
+        t_critical_upper = None
+        power = 1 - nct.cdf(t_critical_lower, df, ncp)
 
     return {
         'delta': delta,
@@ -105,7 +105,7 @@ def get_power_contrast_t_test(delta: float, alpha: float, sample_variance: float
     if two_tail:
         t_critical_upper = t.ppf(1 - alpha / 2, df)
         t_critical_lower = t.ppf(alpha / 2, df)
-        power = nct.cdf(t_critical_upper, df, ncp) + nct.sf(t_critical_lower, df, ncp)
+        power = nct.sf(t_critical_upper, df, ncp) + nct.cdf(t_critical_lower, df, ncp)
     else:
         t_critical_upper = t.ppf(1 - alpha, df)
         power = 1 - nct.cdf(t_critical_upper, df, ncp)

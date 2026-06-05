@@ -15,14 +15,14 @@ def simulate_t_test_pooled_var_power(mu_1, mu_2, sigma1, sigma2, n, alpha, two_t
 	rejection = 0
 
 	for _ in range(num_simulations):
-		sim_sample_1 = np.random.normal(mu_1, sigma, n)
-		sim_sample_2 = np.random.normal(mu_2, sigma, n)
-		result = st.t_test_mean_diff_pooled_var(sim_sample_1, sim_sample_2, two_tail=two_tails)
+		sim_sample_1 = np.random.normal(mu_1, sigma1, n)
+		sim_sample_2 = np.random.normal(mu_2, sigma2, n)
+		result = st.t_test_pooled_var(sim_sample_1, sim_sample_2, two_tail=two_tails)
 
 		if result['p_value'] < alpha:
-			rejections += 1      
+			rejection += 1      
 
-	power = rejections / num_simulations
+	power = rejection / num_simulations
 
 	return {
 		'power' : power,
@@ -47,9 +47,9 @@ def simulate_f_test_power(mu1, mu2, sigma1, sigma2, n, alpha, num_simulations):
 		result = st.f_test(sim_sample_1, sim_sample_2)
 
 		if result['p_value'] < alpha:
-			rejections += 1      
+			rejection += 1      
 
-	power = rejections / num_simulations
+	power = rejection / num_simulations
 
 	return {
 		'power' : power,
@@ -72,9 +72,9 @@ def simulate_levene_test_power(group_means, group_sd, n, alpha, num_simulations)
 		result = st.levene_test(sim_samples)
 
 		if result['p_value'] < alpha:
-			rejections += 1      
+			rejection += 1      
 
-	power = rejections / num_simulations
+	power = rejection / num_simulations
 
 	return {
 		'power' : power,
@@ -96,12 +96,12 @@ def simulate_welch_t_test_power(mu_1, mu_2, sigma1, sigma2, n1, n2, alpha, two_t
 	for _ in range(num_simulations):
 		sim_sample_1 = np.random.normal(mu_1, sigma1, n1)
 		sim_sample_2 = np.random.normal(mu_2, sigma2, n2)
-		result = st.welch_t_test(sim_sample_1, sim_sample_2, two_tail=two_tails)
+		result = st.welch_t_test(sim_sample_1, sim_sample_2, two_tail=two_tail)
 
 		if result['p_value'] < alpha:
-			rejections += 1      
+			rejection += 1      
 
-	power = rejections / num_simulations
+	power = rejection / num_simulations
 
 	return {
 		'power' : power,
@@ -122,12 +122,12 @@ def simulate_contrast_t_test_power(mu_1, mu_2, sigma, n, alpha, two_tail, num_si
 	for _ in range(num_simulations):
 		sim_sample_1 = np.random.normal(mu_1, sigma, n)
 		sim_sample_2 = np.random.normal(mu_2, sigma, n)
-		result = st.t_test_contrasts(sim_sample_1, sim_sample_2, two_tail=two_tails)
+		result = st.t_test_contrasts(sim_sample_1, sim_sample_2, two_tail=two_tail)
 
 		if result['p_value'] < alpha:
-			rejections += 1      
+			rejection += 1      
 
-	power = rejections / num_simulations
+	power = rejection / num_simulations
 
 	return {
 		'power' : power,
@@ -150,9 +150,9 @@ def simulate_anova_f_test_power(group_means, sigma, n, alpha, num_simulations):
 		result = st.anova_f_test(sim_samples)
 
 		if result['p_value'] < alpha:
-			rejections += 1      
+			rejection += 1      
 
-	power = rejections / num_simulations
+	power = rejection / num_simulations
 
 	return {
 		'power' : power,

@@ -318,8 +318,10 @@ def two_way_anova_f_test(sample_array: np.array):
 	N = len(sample_array)
 	n = N / (J * K)
 
-	factor_a_numeric = np.array([np.where(factor_a_levels == f)[0][0] for f in factors_A])
-	factor_b_numeric = np.array([np.where(factor_b_levels == f)[0][0] for f in factors_B])
+	# Drop first one-hot encoding
+	D_A = np.column_stack([(factors_A == lvl).astype(float) for lvl in factor_a_levels[1:]])
+	D_B = np.column_stack([(factors_B == lvl).astype(float) for lvl in factor_b_levels[1:]])
+	D_AB = np.column_stack([D_A[:, a] * D_B[:, b] for a in range(D_A.shape[1]) for b in range(D_B.shape[1])])
 
 	grand_mean = np.mean(response)
 
@@ -330,16 +332,15 @@ def two_way_anova_f_test(sample_array: np.array):
 	df_resid = df_total - df_A - df_B - df_interaction  # Residual degrees of freedom
 	df_resid_reduced = df_total - df_A - df_B
 
-
 	# Compute SS_A
-	X_A = np.vstack([np.ones(len(response)), factor_a_numeric]).T
+	X_A = np.column_stack([np.ones(len(response)), D_A])
 	beta_A = np.linalg.inv(X_A.T @ X_A) @ X_A.T @ response
 	fitted_values_A = X_A @ beta_A
 	SS_A = np.sum((fitted_values_A - grand_mean) ** 2)
 	residuals_A = response - fitted_values_A
 
 	# Compute SS_B
-	X_AB = np.vstack([np.ones(len(response)), factor_a_numeric, factor_b_numeric]).T
+	X_AB = np.column_stack([np.ones(len(response)), D_A, D_B])
 	beta_B = np.linalg.inv(X_AB.T @ X_AB) @ X_AB.T @ residuals_A
 	fitted_values_B = X_AB @ beta_B
 	SS_B = np.sum((fitted_values_B - 0) ** 2)
@@ -350,8 +351,7 @@ def two_way_anova_f_test(sample_array: np.array):
 	residuals_AB = response - fitted_values_AB
 	SS_resid_reduced = np.sum(residuals_AB ** 2)
 
-	interaction_ab = factor_a_numeric * factor_b_numeric
-	X_full = np.vstack([np.ones(len(response)), factor_a_numeric, factor_b_numeric, interaction_ab]).T
+	X_full = np.column_stack([np.ones(len(response)), D_A, D_B, D_AB])
 	beta_interaction = np.linalg.inv(X_full.T @ X_full) @ X_full.T @ residuals_AB
 	fitted_values_interactions = X_full @ beta_interaction
 	SS_interaction = np.sum((fitted_values_interactions - 0) ** 2)
