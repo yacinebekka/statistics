@@ -1,4 +1,4 @@
-from scipy.stats import t, f
+from scipy.stats import t, f, studentized_range
 import numpy as np
 
 ## Check against R implementation -> OK R.A.S.
@@ -51,6 +51,49 @@ def t_test_pooled_var(sample_1: np.array, sample_2: np.array, two_tail: bool = T
 		'df': df
 	}
 
+def tukey_hsd_test(
+	sample_1: np.array, 
+	sample_2: np.array, 
+	mse: float,
+	df_resid: int,
+	k: int,
+	alpha: float=0.05
+):
+	'''
+	Tukey HSD test, for post-hoc comparison
+
+	mse = MSE from the ANOVA test
+	df_resid = df of residuals from the ANOVA test
+	k = Number of groups being compared post-hoc
+	'''
+
+	x_bar_1 = np.mean(sample_1)
+	x_bar_2 = np.mean(sample_2)
+	mean_diff = x_bar_1 - x_bar_2
+
+	n1 = len(sample_1)
+	n2 = len(sample_2)
+
+	se_mean_diff = np.sqrt((mse / 2) * (1/n1 + 1/n2))
+	q_statistic = np.abs(mean_diff) / se_mean_diff
+
+	p_value = studentized_range.sf(q_statistic, k, df_resid)
+	q_critical = studentized_range.ppf(1 - alpha, k, df_resid)
+	margin_of_error = q_critical * se_mean_diff
+	lower_confidence_bound = mean_diff - margin_of_error
+	upper_confidence_bound = mean_diff + margin_of_error
+
+	return {
+		'x_bar_1': x_bar_1, 
+		'x_bar_2': x_bar_2, 
+		'mean_diff': mean_diff, 
+		'lower_confidence_bound': lower_confidence_bound, 
+		'upper_confidence_bound': upper_confidence_bound, 
+		'se_mean_diff': se_mean_diff, 
+		'q_statistic': q_statistic, 
+		'p_value': p_value, 
+		'df': df_resid
+	}
 
 def f_test(sample_1: np.array, sample_2: np.array, alpha: float=0.05):
 	'''

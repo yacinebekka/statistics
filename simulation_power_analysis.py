@@ -1,5 +1,5 @@
 import numpy as np
-import statistical_tests as st
+from statistics_lib import statistical_tests as st
 
 
 def simulate_t_test_pooled_var_power(mu_1, mu_2, sigma1, sigma2, n, alpha, two_tail, num_simulations):
